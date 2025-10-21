@@ -1,2 +1,2 @@
 #PROYECTO INICIAL
-print("hola muchachos")
+print("hola muchachos un cambio pa la people")
