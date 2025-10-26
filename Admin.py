@@ -41,4 +41,4 @@ class Administrador(Persona):
         pass
 
     def descripcion(self):
-return f"Administrador: {self.nombre}"
+    return f"Administrador: {self.nombre}"
