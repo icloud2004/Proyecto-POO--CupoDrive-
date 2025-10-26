@@ -22,7 +22,7 @@ class Administrador:
 
 
 class Administrador(Persona):
-    def init(self, cedula, nombre, usuario, contrasena, rol):
+    def __init__(self, cedula, nombre, usuario, contrasena, rol):
         super().init(cedula, nombre)
         self.usuario = usuario
         self.contrasena = contrasena
