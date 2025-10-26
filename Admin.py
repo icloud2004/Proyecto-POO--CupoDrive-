@@ -1,3 +1,5 @@
+from Reporte import *
+
 class Administrador:
     def __init__(self, cedula, usuario, contrasena, rol):
         self.cedula = cedula
