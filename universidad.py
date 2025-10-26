@@ -32,7 +32,12 @@ class universidad:
     
   def configurar():
     pass
+    
   def consultar_estado():
     pass
+    
   def generar_reporte():
     pass
+
+    
+#>:3
