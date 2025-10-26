@@ -3,5 +3,5 @@ from abc import ABCMeta
 
 class Persona (ABCMeta):
     @abstractmethod
-    def registrar_persona():
+    def describir():
         pass
