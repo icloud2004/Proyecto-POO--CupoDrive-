@@ -26,7 +26,7 @@ class PeriodoAcademico(Reporte):
         pass
     def generar_reporte(self):
         pass
-<<<<<<< HEAD:periodo_acádemico.py
+#
     def generar_informe(self):
         # Ejemplo de informe: número de aspirantes que postularon a la universidad de este período
         total = sum(1 for a in self.aspirantes if a[1] == self.universidad)
@@ -58,5 +58,3 @@ if __name__ == "__main__":
 
     #Generar y mostrar informe
     print(periodo.generar_informe())
-=======
->>>>>>> 169aad0c346ed19a082b2ae3f13da942e223cbdc:Periodo_acádemico.py
