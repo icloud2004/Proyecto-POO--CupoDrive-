@@ -1,5 +1,5 @@
 from Reporte import *
-from persona import Persona
+from Persona import Persona
 
 class Administrador:
     def __init__(self, cedula, usuario, contrasena, rol):
@@ -23,7 +23,7 @@ class Administrador:
 
 class Administrador(Persona):
     def __init__(self, cedula, nombre, usuario, contrasena, rol):
-        super().init(cedula, nombre)
+        super().__init__(cedula, nombre)
         self.usuario = usuario
         self.contrasena = contrasena
         self.rol = rol
