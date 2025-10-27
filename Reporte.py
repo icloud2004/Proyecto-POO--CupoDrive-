@@ -1,7 +1,12 @@
+from abc import ABC
 from abc import abstractmethod
-from abc import ABCMeta
+from Cargar_datos import aspirantes
 
-class Reporte(ABCMeta):
+class Reporte(ABC):
+    def __init__(self, aspirantes):
+        self.aspirantes = aspirantes
+
     @abstractmethod
-    def generar_reporte():
+    def generar_informe(self):
         pass
+

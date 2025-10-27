@@ -1,20 +1,39 @@
-from Reporte import *
+from Reporte import Reporte
+from Cargar_datos import cargar_datos
 
-class Administrador:
-    def __init__(self, cedula, usuario, contrasena, rol):
+class Administrador(Reporte):
+    def __init__(self, aspirantes, cedula, usuario, contrasena, rol):
+        super().__init__(aspirantes)
         self.cedula = cedula
         self.usuario = usuario
         self.contrasena = contrasena
         self.rol = rol
 
-    def asignar_cupos(self):
-        pass
+    def generar_informe(self):
+        total = len(self.aspirantes)
+        cupos_aceptados = sum(1 for a in self.aspirantes if a[15] == "1")
+        no_aceptados = total - cupos_aceptados
+        return (
+            "=== INFORME DEL ADMINISTRADOR ===\n"
+            f"Total de aspirantes: {total}\n"
+            f"Cupos aceptados: {cupos_aceptados}\n"
+            f"No aceptaron el cupo: {no_aceptados}\n"
+            f"Porcentaje de aceptación: {(cupos_aceptados / total) * 100:.2f}%"
+        )
 
-    def liberar_cupos(self):
-        pass
+# ------------------------------
+# EJEMPLO DE USO
+# ------------------------------
+if __name__ == "__main__":
+    datos = cargar_datos().cargar()
 
-    def generar_reporte(self):
-        pass
+    # ✅ Instanciamos la subclase, NO la clase abstracta
+    admin = Administrador(
+        aspirantes=datos,
+        cedula="1100456789",
+        usuario="admin01",
+        contrasena="1234",
+        rol="Administrador"
+    )
 
-    def modificar_segmento(self):
-        pass
+    print(admin.generar_informe())
