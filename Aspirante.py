@@ -16,8 +16,5 @@ class Aspirante(Persona):
     def aceptar_cupo(self, cupo):
         pass
 
-    def matricular(self, carrera):
-        pass
-
     def descripcion(self):
         return f"Aspirante: {self.nombre}"
