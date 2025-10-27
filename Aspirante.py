@@ -1,4 +1,4 @@
-from persona import Persona
+from Persona import Persona
 
 class Aspirante(Persona):
     def __init__(self, cedula, nombre, puntaje, grupo, titulos, estado, vulnerabilidad, fecha_inscripcion):
