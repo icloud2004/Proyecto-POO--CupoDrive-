@@ -1,5 +1,5 @@
 from Reporte import *
-from persona import Persona
+from Persona import Persona
 
 class Administrador:
     def __init__(self, cedula, usuario, contrasena, rol):
