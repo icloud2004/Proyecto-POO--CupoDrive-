@@ -9,4 +9,5 @@ class cargar_datos():
             next(lector)
             for fila in lector:
                 aspirantes.append(fila)
+                print(fila)
         return aspirantes

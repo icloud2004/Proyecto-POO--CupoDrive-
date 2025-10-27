@@ -3,7 +3,7 @@ from Cargar_datos import cargar_datos
 
 class PeriodoAcademico(Reporte):
     def __init__(self, aspirantes, id_periodo, nombre, fecha_inicio, estado, universidad,
-                 lista_carreras, lista_cupos, lista_matriculas):
+                 lista_carreras, lista_cupos):
         super().__init__(aspirantes)  # Atributo heredado de Reporte para generar informes
         self.id_periodo = id_periodo
         self.nombre = nombre
@@ -12,7 +12,6 @@ class PeriodoAcademico(Reporte):
         self.universidad = universidad
         self.lista_carreras = lista_carreras
         self.lista_cupos = lista_cupos
-        self.lista_matriculas = lista_matriculas
 
     def activar(self):
         pass
@@ -53,7 +52,6 @@ if __name__ == "__main__":
         universidad="UNIVERSIDAD LAYCA ELOY ALFARO DE MANABÍ",
         lista_carreras=["Software"],
         lista_cupos=[10],
-        lista_matriculas=[]
     )
 
     #Generar y mostrar informe
