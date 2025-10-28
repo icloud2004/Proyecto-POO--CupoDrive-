@@ -33,7 +33,6 @@ class Cupo:
 
 #Ejemplo caso de uso
 if __name__ == "__main__":
-    print("=== CASO DE USO: MÓDULO CUPO (SISTEMA SAC) ===\n")
 
     class Aspirante:
         def __init__(self, nombre, puntaje, estado="Postulado"):
