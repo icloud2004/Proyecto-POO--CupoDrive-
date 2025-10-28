@@ -56,3 +56,32 @@ def main():
     #Asignar cupos
     asignacion = Asignacion_cupo(carrera_software, datos)
     asignacion.asignar_cupos()
+
+    #Registrar aceptación del primer aspirante asignado
+    if asignacion.asignados:
+        primer_aspirante = asignacion.asignados[0]
+        primer_cupo = carrera_software.cupos[0]
+
+        aceptacion = Aceptacion_cupo(primer_aspirante, primer_cupo)
+        aceptacion.aceptar()
+
+        #Generar certificado
+        certificado = Certificado_aceptacion(aceptacion)
+        certificado.generar_certificado()
+
+        #Registrar en repositorio
+        repo = RepositorioCupos()
+        repo.registrar_aceptacion(primer_aspirante, primer_cupo, aceptacion.fecha_aceptacion)
+        repo.mostrar_registros()
+
+    #Reporte del administrador
+    admin = Admin("1100456789", "María Zamora", "admin01", "1234", "Administrador General")
+    admin.generar_reporte(datos)
+
+    # 8️ Cierre del periodo
+    periodo.cerrar()
+
+    print("\n Proceso SAC completado correctamente.\n")
+
+if __name__ == "__main__":
+    main()
