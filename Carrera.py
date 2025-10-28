@@ -31,3 +31,19 @@ class Carrera:
         print("Segmentos:")
         for seg in self.segmentos:
             print(f" - {seg.nombre} ({seg.porcentaje}%)")
+            
+#ejemplo de uso
+
+#creamos instancias de segmentos
+politica_cuota = Segmento("politica de cuota", 10, "Discriminados por las IES públicas")
+vulnerabilidad_socioeconomica = Segmento("Vulnerabilidad socioeconómica", 30, "pobreza")
+merito_academico = Segmento("Mérito acádemico", 30, "cuadro de honor de los Colegios")
+bachilleres = Segmento("segmento", 30, "Discriminados por las IES públicas")
+
+
+#instanciamos la carrera de software con sus atributos
+carrera_software = Carrera(1,"Software", 10, [politica_cuota,vulnerabilidad_socioeconomica,
+                                              merito_academico, bachilleres] )
+
+#hacemos uso del metodo mostrar info
+carrera_software.mostrar_informacion()

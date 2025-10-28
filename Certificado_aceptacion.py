@@ -24,3 +24,32 @@ class Certificado_aceptacion:
             print("Estado : ACEPTADO ")
         else:
             print(f"No se puede generar certificado, {aspirante.nombre} no ha aceptado el cupo.")
+            
+#instanciamos un aspirante
+aspirante = Aspirante(
+        cedula="1350664511",
+        nombre="Roler Bolaños",
+        puntaje=845.5,
+        grupo="2",
+        titulos="Bachiller",
+        estado="Asignado",          
+        vulnerabilidad="Media",
+        fecha_inscripcion="2025-01-10"
+    )
+
+#instanciamos un ejemplo de cupo
+cupo = Cupo(
+        id_cupo=101,
+        carrera="Ingeniería en Software",
+        estado="Asignado",
+        segmento="2",
+        periodo="2025-A"
+    )
+
+# Creamos el proceso de aceptación de cupo
+aceptacion = Aceptacion_cupo(aspirante, cupo)
+aceptacion.aceptar()  # Cambia estados y asigna fecha
+
+# Generamos el certificado de aceptación
+certificado = Certificado_aceptacion(aceptacion)
+certificado.generar_certificado()
