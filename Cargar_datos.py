@@ -16,8 +16,10 @@ class Cargar_datos:
 
                 for fila in lector:
                     (
-                        identificacion, nombres, apellidos,
-                        puntaje_postulacion, segmento,
+                        ies_id, ies_nombre, identificacion, nombres, apellidos,
+                        puntaje_postulacion, prioridad, segmento, nombre_carrera,
+                        campus, tipo_cupo, modalidad, nivel, jornada,
+                        acepta_estado, fecha_acepta_cupo
                     ) = fila
 
                   
