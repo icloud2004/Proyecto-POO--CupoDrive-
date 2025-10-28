@@ -1,7 +1,9 @@
-from abc import abstractmethod
-from abc import ABCMeta
+from abc import ABC, abstractmethod
+class Persona(ABC):
+    def __init__(self, cedula, nombre):
+        self.cedula = cedula
+        self.nombre = nombre
 
-class Persona (ABCMeta):
     @abstractmethod
-    def describir():
+    def descripcion(self):
         pass
