@@ -52,3 +52,43 @@ class Asignacion_cupo:
             if c.estado == "Asignado" and c.aspirante.estado == "Rechazado":
                 c.liberar()
                 print(f" Cupo liberado: {c.id_cupo} ({c.carrera})")
+
+#Ejemplo de caso de uso
+if __name__ == "__main__":
+
+    # Clases auxiliares simuladas
+    class Aspirante:
+        def __init__(self, nombre, puntaje, estado="Postulado"):
+            self.nombre = nombre
+            self.puntaje = puntaje
+            self.estado = estado
+            self.carrera_asignada = None
+
+    class Carrera:
+        def __init__(self, nombre, cupos_disponibles):
+            self.nombre = nombre
+            self.cupos = [Cupo(i + 1, nombre, "Disponible", "General", "2025A") for i in range(cupos_disponibles)]
+
+        def obtener_cupos_disponibles(self):
+            return [c for c in self.cupos if c.estado == "Disponible"]
+
+    
+    aspirantes = [
+        Aspirante("José Herrera", 910),
+        Aspirante("María López", 875),
+        Aspirante("Carlos Paredes", 900),
+        Aspirante("Diana Pérez", 830),
+        Aspirante("Ana Torres", 870),
+    ]
+
+    
+    carrera_software = Carrera("Ingeniería en Software", cupos_disponibles=3)
+
+    asignacion = Asignacion_cupo(carrera_software, aspirantes)
+
+    asignacion.asignar_cupos()
+
+    # Mostrar resumen final
+    print("\n Asignación finalizada.\nAspirantes asignados:")
+    for a in asignacion.asignados:
+        print(f"- {a.nombre} ({a.puntaje} puntos) → {a.carrera_asignada}")

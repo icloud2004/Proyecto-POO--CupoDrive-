@@ -79,3 +79,4 @@ if __name__ == "__main__":
     print(" Estado final:")
     print(aspirante1.descripcion())
     print(aspirante2.descripcion())
+    
