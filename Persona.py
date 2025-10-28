@@ -14,6 +14,6 @@ class Estudiante(Persona):
         self.carrera = carrera
     def descripcion(self):
         return (f"{self.nombre} con cédula {self.cedula} es estudiante de {self.carrera}.")
-    
-estudiante1 = Estudiante("123456784", "Jorge Luis", "Tecnologia de la informacion")
-print(estudiante1.descripcion())
+if __name__ == "__main__":
+ estudiante1 = Estudiante("123456784", "Jorge Luis", "Tecnologia de la informacion")
+ print(estudiante1.descripcion())

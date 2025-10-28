@@ -53,37 +53,38 @@ class Universidad:
         print(f"Total administradores: {len(self.lista_administradores)}")
         print(f"Total periodos: {len(self.lista_periodos)}")
 # Caso de uso
-class Carrera:
+if __name__ == "__main__":
+ class Carrera:
     def __init__(self, nombre, oferta_cupos):
         self.nombre = nombre
         self.oferta_cupos = oferta_cupos
 
-class Administrador:
+ class Administrador:
     def __init__(self, nombre):
         self.nombre = nombre
 
-class Periodo:
+ class Periodo:
     def __init__(self, nombre, estado):
         self.nombre = nombre
         self.estado = estado
 
-uni = Universidad("01", "Universidad Layca Eloy Alfaro de Manabi ", "Av. Circunvalacion", "0999999999", "info@uleam.edu.ec", "Activa")
+ uni = Universidad("01", "Universidad Layca Eloy Alfaro de Manabi ", "Av. Circunvalacion", "0999999999", "info@uleam.edu.ec", "Activa")
 
-c1 = Carrera("Ingeniería en Software", 120)
-c2 = Carrera("Diseño Gráfico", 80)
-admin1 = Administrador("Jorge Luis")
-p1 = Periodo("Periodo 2025-2", "En curso")
+ c1 = Carrera("Ingeniería en Software", 120)
+ c2 = Carrera("Diseño Gráfico", 80)
+ admin1 = Administrador("Jorge Luis")
+ p1 = Periodo("Periodo 2025-2", "En curso")
 
-uni.agregar_carrera(c1)
-uni.agregar_carrera(c2)
-uni.listar_carreras()
+ uni.agregar_carrera(c1)
+ uni.agregar_carrera(c2)
+ uni.listar_carreras()
 
-uni.eliminar_carrera("Diseño Gráfico")
-uni.listar_carreras()
+ uni.eliminar_carrera("Diseño Gráfico")
+ uni.listar_carreras()
 
-uni.agregar_administrador(admin1)
-uni.agregar_periodo(p1)
-uni.listar_periodos()
+ uni.agregar_administrador(admin1)
+ uni.agregar_periodo(p1)
+ uni.listar_periodos()
 
-uni.consultar_estado()
-uni.generar_reporte()
+ uni.consultar_estado()
+ uni.generar_reporte()

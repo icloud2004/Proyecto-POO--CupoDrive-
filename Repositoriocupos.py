@@ -39,22 +39,23 @@ class RepositorioCupos:
         for r in self.registro_estados:
             print(r)
 # Caso de uso
-class Aspirante:
+if __name__ == "__main__":
+ class Aspirante:
     def __init__(self, nombre):
         self.nombre = nombre
         self.estado = "pendiente"
 
-class Cupo:
+ class Cupo:
     def __init__(self, id_cupo, carrera):
         self.id_cupo = id_cupo
         self.carrera = carrera
         self.estado = "disponible"
 
-repo = RepositorioCupos()
-aspirante1 = Aspirante("Jorge Luis")
-cupo1 = Cupo("001", "Tecnologia de la informacion")
+ repo = RepositorioCupos()
+ aspirante1 = Aspirante("Jorge Luis")
+ cupo1 = Cupo("001", "Tecnologia de la informacion")
 
-repo.actualizar_estado_aspirante(aspirante1, "en revisión")
-repo.actualizar_estado_cupo(cupo1, "asignado")
-repo.registrar_aceptacion(aspirante1, cupo1, datetime.now().strftime("%Y-%m-%d"))
-repo.mostrar_registros()
+ repo.actualizar_estado_aspirante(aspirante1, "en revisión")
+ repo.actualizar_estado_cupo(cupo1, "asignado")
+ repo.registrar_aceptacion(aspirante1, cupo1, datetime.now().strftime("%Y-%m-%d"))
+ repo.mostrar_registros()

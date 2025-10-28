@@ -1,7 +1,7 @@
 from Cargar_datos import Cargar_datos
 from Carrera import Carrera
 from Asignación_cupos import Asignacion_cupo
-from Admin import Admin
+from Admin import Administrador
 from Aceptacion_cupo import Aceptacion_cupo
 from Certificado_aceptacion import Certificado_aceptacion
 from Repositoriocupos import RepositorioCupos
@@ -75,7 +75,7 @@ def main():
         repo.mostrar_registros()
 
     #Reporte del administrador
-    admin = Admin("1100456789", "María Zamora", "admin01", "1234", "Administrador General")
+    admin = Administrador("1100456789", "María Zamora", "admin01", "1234", "Administrador General")
     admin.generar_reporte(datos)
 
     # 8️ Cierre del periodo
