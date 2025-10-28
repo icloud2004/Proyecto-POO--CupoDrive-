@@ -25,14 +25,19 @@ class Aspirante(Persona):
     def descripcion(self):
         return (f"Aspirante: {self.nombre} ({self.puntaje} puntos, estado: {self.estado})
 
-#ejemplos uso
+#Ejemplo caso de uso
+
+# Clase auxiliar para simular el objeto Cupo
 
 class Cupo:
     def __init__(self, id_cupo, carrera):
         self.id_cupo = id_cupo
         self.carrera = carrera
 
+
 if __name__ == "__main__":
+
+    # Crear Instancias
     aspirante1 = Aspirante(
         cedula="1100456789",
         nombre="José Herrera",
@@ -59,15 +64,18 @@ if __name__ == "__main__":
     cupo_software = Cupo(id_cupo=1, carrera="Ingeniería en Software")
     cupo_ti = Cupo(id_cupo=2, carrera="Tecnologías de la Información")
 
+    # Mostrar estado inicial
     print(" Estado inicial:")
     print(aspirante1.descripcion())
     print(aspirante2.descripcion())
     print()
 
+    # Simular decisiones
     aspirante1.aceptar_cupo(cupo_software)
     aspirante2.rechazar_cupo(cupo_ti)
     print()
 
+    # Mostrar estado final
     print(" Estado final:")
     print(aspirante1.descripcion())
     print(aspirante2.descripcion())
