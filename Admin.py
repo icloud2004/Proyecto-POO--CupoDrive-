@@ -1,39 +1,34 @@
-from Reporte import Reporte
-from Cargar_datos import cargar_datos
+from Persona import Persona
 
-class Administrador(Reporte):
-    def __init__(self, aspirantes, cedula, usuario, contrasena, rol):
-        super().__init__(aspirantes)
-        self.cedula = cedula
+class Administrador(Persona):
+
+    def __init__(self, cedula, nombre, usuario, contrasena, rol):
+        super().__init__(cedula, nombre)
         self.usuario = usuario
         self.contrasena = contrasena
-        self.rol = rol
+        self.rol = rol  # Ejemplo: "Administrador general"
 
-    def generar_informe(self):
-        total = len(self.aspirantes)
-        cupos_aceptados = sum(1 for a in self.aspirantes if a[15] == "1")
-        no_aceptados = total - cupos_aceptados
-        return (
-            "=== INFORME DEL ADMINISTRADOR ===\n"
+    def generar_reporte(self, lista_aspirantes):
+        """Genera un reporte básico del proceso de asignación."""
+        total = len(lista_aspirantes)
+        aceptados = sum(1 for a in lista_aspirantes if a.estado == "Aceptado")
+        rechazados = sum(1 for a in lista_aspirantes if a.estado == "Rechazado")
+        sin_respuesta = total - (aceptados + rechazados)
+
+        reporte = (
+            "\n===== REPORTE GENERAL DEL PROCESO ASIGNACION DE CUPO =====\n"
+            f"Administrador: {self.nombre}\n"
+            f"Rol: {self.rol}\n"
             f"Total de aspirantes: {total}\n"
-            f"Cupos aceptados: {cupos_aceptados}\n"
-            f"No aceptaron el cupo: {no_aceptados}\n"
-            f"Porcentaje de aceptación: {(cupos_aceptados / total) * 100:.2f}%"
+            f"Aceptaron el cupo: {aceptados}\n"
+            f"Rechazaron el cupo: {rechazados}\n"
+            f"Sin respuesta: {sin_respuesta}\n"
+            f"Porcentaje de aceptación: {(aceptados / total) * 100:.2f}%\n"
+            "===========================================\n"
         )
+        print(reporte)
+        return reporte
 
-# ------------------------------
-# EJEMPLO DE USO
-# ------------------------------
-if __name__ == "__main__":
-    datos = cargar_datos().cargar()
-
-    # ✅ Instanciamos la subclase, NO la clase abstracta
-    admin = Administrador(
-        aspirantes=datos,
-        cedula="1100456789",
-        usuario="admin01",
-        contrasena="1234",
-        rol="Administrador"
-    )
-
-    print(admin.generar_informe())
+    def descripcion(self):
+        """Descripción simple del administrador."""
+        return f"Administrador: {self.nombre} ({self.rol})"
