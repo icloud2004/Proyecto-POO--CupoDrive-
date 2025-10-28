@@ -16,14 +16,6 @@ class Aceptacion_cupo:
         else:
             print(f" No se puede aceptar el cupo: {self.aspirante.nombre} no tiene un cupo asignado válido.")
 
-    def generar_certificado(self):
-        if self.aspirante.estado == "Aceptado":
-            print(f"\n CERTIFICADO DE ACEPTACIÓN DE CUPO")
-            print(f"Aspirante: {self.aspirante.nombre}")
-            print(f"Carrera: {self.cupo.carrera}")
-            print(f"Fecha de aceptación: {self.fecha_aceptacion}")
-        else:
-            print(" No se puede generar certificado, el aspirante no ha aceptado un cupo.")
 
 #Ejemplo de caso de uso
 if __name__ == "__main__":
@@ -55,5 +47,3 @@ if __name__ == "__main__":
     print(" Intentando aceptar cupo...")
     proceso.aceptar()
 
-    print("\n Generando certificado...")
-    proceso.generar_certificado()
