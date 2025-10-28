@@ -38,3 +38,21 @@ def main():
     )
     uni.agregar_periodo(periodo)
     periodo.activar()
+
+    #Crear una carrera de ejemplo
+    carrera_software = Carrera(id_carrera="001", nombre="Software", oferta_cupos=5)
+    uni.agregar_carrera(carrera_software)
+    periodo.agregar_carrera(carrera_software)
+
+    #Crear segmentos
+    seg_vulnerabilidad = Segmento("Vulnerabilidad", 10, ["alta vulnerabilidad"])
+    seg_merito = Segmento("Mérito Académico", 20, ["puntaje >= 850"])
+    seg_general = Segmento("Población General", 70, ["todos"])
+
+    carrera_software.agregar_segmento(seg_vulnerabilidad)
+    carrera_software.agregar_segmento(seg_merito)
+    carrera_software.agregar_segmento(seg_general)
+
+    #Asignar cupos
+    asignacion = Asignacion_cupo(carrera_software, datos)
+    asignacion.asignar_cupos()
