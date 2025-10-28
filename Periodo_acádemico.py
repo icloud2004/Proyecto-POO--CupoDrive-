@@ -42,3 +42,50 @@ class Periodo_academico:
         print(f"Número de carreras: {len(self.lista_carreras)}")
         total_cupos = sum(len(c.cupos) for c in self.lista_carreras)
         print(f"Total de cupos generados: {total_cupos}")
+
+        #Ejemplo caso de uso
+
+if __name__ == "__main__":
+
+    # Clase auxiliar simulada para Carrera
+    class Carrera:
+        def __init__(self, nombre, oferta_cupos):
+            self.nombre = nombre
+            self.oferta_cupos = oferta_cupos
+            self.cupos = [f"Cupo{i+1}" for i in range(oferta_cupos)]
+
+        def obtener_cupos_disponibles(self):
+            return self.cupos
+
+    
+    universidad = "Universidad Laica Eloy Alfaro de Manabí"
+
+
+    periodo = Periodo_academico(
+        id_periodo="2025A",
+        nombre="Primer Semestre 2025",
+        fecha_inicio="2025-03-01",
+        estado="Inactivo",
+        universidad=universidad
+    )
+
+
+    periodo.activar()
+
+    
+    carrera1 = Carrera("Ingeniería en Software", 5)
+    carrera2 = Carrera("Tecnologías de la Información", 4)
+    carrera3 = Carrera("Administración de Empresas", 3)
+
+    periodo.agregar_carrera(carrera1)
+    periodo.agregar_carrera(carrera2)
+    periodo.agregar_carrera(carrera3)
+
+    
+    periodo.listar_carreras()
+    periodo.listar_cupos()
+
+
+    periodo.generar_reporte()
+
+    periodo.cerrar()
