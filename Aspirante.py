@@ -23,7 +23,7 @@ class Aspirante(Persona):
         print(f" {self.nombre} ha rechazado el cupo en {cupo.carrera}.")
 
     def descripcion(self):
-        return (f"Aspirante: {self.nombre} ({self.puntaje} puntos, estado: {self.estado})
+        return f"Aspirante: {self.nombre} ({self.puntaje} puntos, estado: {self.estado})"
 
 #Ejemplo caso de uso
 
