@@ -42,11 +42,11 @@ class Cargar_datos:
             print(f" Error: no se encontró el archivo {self.ruta_csv}.")
             return []
 #ejemplo de uso
-
+if __name__ == "__main__":
 #instanciamos la clase cargar datos
-instancia = Cargar_datos()
+ instancia = Cargar_datos()
 
 #ejecutamos el método cargar
-a = instancia.cargar()
-for i in a:
+ a = instancia.cargar()
+ for i in a:
     print(f"{i.cedula} {i.nombre} {i.puntaje} {i.grupo} {i.titulos} {i.estado} {i.vulnerabilidad} {i.fecha_inscripcion} \n ")
