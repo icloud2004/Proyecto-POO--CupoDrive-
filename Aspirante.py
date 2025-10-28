@@ -24,7 +24,6 @@ class Aspirante(Persona):
 
     def descripcion(self):
         return f"Aspirante: {self.nombre} ({self.puntaje} puntos, estado: {self.estado})
-        from Persona import Persona
 
 #ejemplos uso
 
