@@ -30,3 +30,39 @@ class Cupo:
             print(f" {self.aspirante.nombre} aceptó el cupo de {self.carrera}.")
         else:
             print(" No se puede aceptar un cupo sin aspirante asignado o ya aceptado.")
+
+#Ejemplo caso de uso
+if __name__ == "__main__":
+    print("=== CASO DE USO: MÓDULO CUPO (SISTEMA SAC) ===\n")
+
+    class Aspirante:
+        def __init__(self, nombre, puntaje, estado="Postulado"):
+            self.nombre = nombre
+            self.puntaje = puntaje
+            self.estado = estado
+
+    aspirante1 = Aspirante("José Herrera", 910)
+    aspirante2 = Aspirante("María López", 870)
+
+    cupo1 = Cupo(id_cupo=1, carrera="Ingeniería en Software", segmento="General", periodo="2025A")
+
+   
+    print(" Asignando aspirante al cupo...")
+    cupo1.asignar_aspirante(aspirante1)
+
+   
+    print("\n Intentando asignar otro aspirante al mismo cupo...")
+    cupo1.asignar_aspirante(aspirante2)
+
+   
+    print("\n Aspirante acepta el cupo...")
+    cupo1.aceptar()
+
+    print("\n Intentando liberar el cupo aceptado...")
+    cupo1.liberar()
+
+    #  Crear un segundo cupo para demostrar liberación real
+    print("\n Caso adicional: liberar cupo asignado...")
+    cupo2 = Cupo(id_cupo=2, carrera="Tecnologías de la Información")
+    cupo2.asignar_aspirante(aspirante2)
+    cupo2.liberar()
