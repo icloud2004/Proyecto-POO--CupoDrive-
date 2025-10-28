@@ -32,3 +32,34 @@ class Administrador(Persona):
     def descripcion(self):
         """Descripción simple del administrador."""
         return f"Administrador: {self.nombre} ({self.rol})"
+
+#Ejemplo caso de uso
+if __name__ == "__main__":
+
+    # Clase auxiliar: simulamos un Aspirante con solo nombre y estado
+    class Aspirante:
+        def __init__(self, nombre, estado):
+            self.nombre = nombre
+            self.estado = estado
+
+    
+    aspirantes = [
+        Aspirante("José Herrera", "Aceptado"),
+        Aspirante("María López", "Rechazado"),
+        Aspirante("Carlos Paredes", "Aceptado"),
+        Aspirante("Diana Pérez", "Postulado"),
+        Aspirante("Ana Torres", "Aceptado"),
+    ]
+
+    # Instancia de clase
+    admin = Administrador(
+        cedula="1100234567",
+        nombre="María Zamora",
+        usuario="admin01",
+        contrasena="1234",
+        rol="Administrador General"
+    )
+
+    # Mostrar descripción y generar el reporte
+    print(admin.descripcion())
+    admin.generar_reporte(aspirantes)
