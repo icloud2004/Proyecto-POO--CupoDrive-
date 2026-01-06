@@ -2,17 +2,30 @@ import csv
 from Aspirante import Aspirante
 
 class Cargar_datos:
+    # Esta variable guardará la única instancia de la clase
+    _instancia_unica = None
+
     def __init__(self, ruta_csv="BaseDatos.csv"):
         self.ruta_csv = ruta_csv
         self.aspirantes = []
+        self.ya_cargo = False # Para saber si ya leímos el archivo
 
+    @classmethod
+    def obtener_instancia(cls):
+        """Este método asegura que solo se cree un objeto"""
+        if cls._instancia_unica is None:
+            cls._instancia_unica = cls()
+        return cls._instancia_unica
 
     def cargar(self):
-        """Carga los aspirantes desde el archivo CSV (BaseDatos.csv)."""
+        # Si ya cargamos los datos antes, no los volvemos a leer
+        if self.ya_cargo:
+            return self.aspirantes
+
         try:
             with open(self.ruta_csv, newline="", encoding="utf-8") as data:
                 lector = csv.reader(data, delimiter=";")
-                next(lector)  # Saltar encabezado
+                next(lector)  # Saltamos encabezado
 
                 for fila in lector:
                     (
@@ -22,7 +35,6 @@ class Cargar_datos:
                         acepta_estado, fecha_acepta_cupo
                     ) = fila
 
-                  
                     aspirante = Aspirante(
                         cedula=identificacion,
                         nombre=f"{nombres} {apellidos}",
@@ -35,18 +47,16 @@ class Cargar_datos:
                     )
                     self.aspirantes.append(aspirante)
 
-            print(f" Cargados {len(self.aspirantes)} aspirantes desde '{self.ruta_csv}'.")
+            self.ya_cargo = True # Marcamos que ya terminó
+            print(f"Éxito: {len(self.aspirantes)} aspirantes listos.")
             return self.aspirantes
 
         except FileNotFoundError:
-            print(f" Error: no se encontró el archivo {self.ruta_csv}.")
+            print("Error: El archivo no existe.")
             return []
-#ejemplo de uso
-if __name__ == "__main__":
-#instanciamos la clase cargar datos
- instancia = Cargar_datos()
 
-#ejecutamos el método cargar
- a = instancia.cargar()
- for i in a:
-    print(f"{i.cedula} {i.nombre} {i.puntaje} {i.grupo} {i.titulos} {i.estado} {i.vulnerabilidad} {i.fecha_inscripcion} \n ")
+# --- Cómo se usa ahora ---
+# En lugar de hacer: objeto = Cargar_datos()
+# Usamos el método que creamos:
+instancia = Cargar_datos.obtener_instancia()
+lista_aspirantes = instancia.cargar()
