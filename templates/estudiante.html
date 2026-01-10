@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Estudiante - CupoDrive</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  </head>
+  <body class="bg-light">
+    <nav class="navbar bg-primary navbar-dark">
+      <div class="container-fluid">
+        <a class="navbar-brand" href="#">CupoDrive - Estudiante</a>
+        <div class="d-flex">
+          <span class="navbar-text text-light me-3">{{ user.name }}</span>
+          <form id="logoutForm" method="post" action="/logout"></form>
+          <button id="btnLogout" class="btn btn-outline-light btn-sm">Cerrar sesión</button>
+        </div>
+      </div>
+    </nav>
+
+    <div class="container py-4">
+      <h4>Mi estado de cupo</h4>
+      {% if aspirante %}
+        <div class="card mb-3">
+          <div class="card-body">
+            <p><strong>Cédula:</strong> {{ aspirante.cedula }}</p>
+            <p><strong>Nombre:</strong> {{ aspirante.nombre }}</p>
+            <p><strong>Puntaje:</strong> {{ aspirante.puntaje }}</p>
+            <p><strong>Estado:</strong> <span id="estadoBadge" class="badge bg-info">{{ aspirante.estado }}</span></p>
+            <p><strong>Carrera asignada:</strong> {{ aspirante.carrera_asignada or '-' }}</p>
+          </div>
+        </div>
+
+        <div id="actions">
+          {% if aspirante.estado == "Asignado" %}
+            <button id="btnAceptar" class="btn btn-success">Aceptar cupo</button>
+            <button id="btnRechazar" class="btn btn-danger">Rechazar cupo</button>
+          {% endif %}
+        </div>
+      {% else %}
+        <div class="alert alert-warning">No se encontró tu registro. Contacta al administrador.</div>
+      {% endif %}
+    </div>
+
+    <script>
+      async function api(path, opts){ const r = await fetch(path, opts); if(!r.ok) throw new Error(await r.text()); return r.json(); }
+      document.getElementById('btnLogout')?.addEventListener('click', async () => { await api('/logout', {method:'POST'}); window.location = '/'; });
+
+      document.getElementById('btnAceptar')?.addEventListener('click', async () => {
+        try{
+          await api('/api/aceptar', {method:'POST'});
+          alert('Cupo aceptado');
+          location.reload();
+        }catch(e){ alert('Error: '+e.message); }
+      });
+      document.getElementById('btnRechazar')?.addEventListener('click', async () => {
+        if(!confirm('¿Confirmas rechazo del cupo?')) return;
+        try{
+          await api('/api/rechazar', {method:'POST'});
+          alert('Cupo rechazado');
+          location.reload();
+        }catch(e){ alert('Error: '+e.message); }
+      });
+    </script>
+  </body>
+</html>

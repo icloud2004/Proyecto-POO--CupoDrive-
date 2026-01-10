@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Admin - CupoDrive</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+      body { min-height: 100vh; }
+      .sidebar { width: 240px; }
+      .content { margin-left: 250px; padding: 20px; }
+    </style>
+  </head>
+  <body>
+    <nav class="navbar bg-dark navbar-dark">
+      <div class="container-fluid">
+        <a class="navbar-brand" href="#">CupoDrive - Admin</a>
+        <div class="d-flex">
+          <span class="navbar-text text-light me-3">Bienvenido, {{ user.name }}</span>
+          <button id="logoutBtn" class="btn btn-outline-light btn-sm">Cerrar sesión</button>
+        </div>
+      </div>
+    </nav>
+
+    <div class="d-flex">
+      <div class="bg-light sidebar position-fixed vh-100 p-3">
+        <h6>Menu</h6>
+        <ul class="nav flex-column">
+          <li class="nav-item"><a href="#" class="nav-link" id="menuCupos">Gestionar Cupos</a></li>
+          <li class="nav-item"><a href="#" class="nav-link" id="menuAspirantes">Ver Aspirantes</a></li>
+        </ul>
+      </div>
+
+      <div class="content flex-fill">
+        <!-- Area dinámica -->
+        <div id="panelCupos" style="display:none;">
+          <h4>Gestionar Cupos</h4>
+          <div class="mb-3">
+            <label class="form-label">Crear cupos (cantidad)</label>
+            <input id="createCount" type="number" class="form-control" value="1" min="1">
+            <button id="btnCreateCupos" class="btn btn-primary mt-2">Crear</button>
+            <button id="btnRefreshCupos" class="btn btn-secondary mt-2">Refrescar</button>
+          </div>
+          <h6>Lista de cupos</h6>
+          <table class="table table-sm" id="tableCupos">
+            <thead><tr><th>ID</th><th>Estado</th><th>Aspirante</th><th>Acciones</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <div id="panelAspirantes" style="display:none;">
+          <h4>Lista de Aspirantes</h4>
+          <table class="table table-sm" id="tableAspirantes">
+            <thead><tr><th>Cédula</th><th>Nombre</th><th>Puntaje</th><th>Estado</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+      </div>
+    </div>
+
+    <script>
+      // funciones básicas para consumir API
+      async function api(path, opts) {
+        const res = await fetch(path, opts);
+        if (!res.ok) throw new Error(await res.text());
+        return res.json();
+      }
+      async function logout() {
+        await api('/logout', {method: 'POST'});
+        window.location = '/';
+      }
+      document.getElementById('logoutBtn').addEventListener('click', logout);
+
+      document.getElementById('menuCupos').addEventListener('click', () => {
+        document.getElementById('panelCupos').style.display='block';
+        document.getElementById('panelAspirantes').style.display='none';
+        loadCupos();
+      });
+      document.getElementById('menuAspirantes').addEventListener('click', () => {
+        document.getElementById('panelCupos').style.display='none';
+        document.getElementById('panelAspirantes').style.display='block';
+        loadAspirantes();
+      });
+
+      document.getElementById('btnCreateCupos').addEventListener('click', async () => {
+        const count = parseInt(document.getElementById('createCount').value) || 1;
+        await api('/api/cupos', {method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({cantidad: count})});
+        loadCupos();
+      });
+      document.getElementById('btnRefreshCupos').addEventListener('click', loadCupos);
+
+      async function loadCupos(){
+        try{
+          const cups = await api('/api/cupos');
+          const tbody = document.querySelector('#tableCupos tbody');
+          tbody.innerHTML = '';
+          cups.forEach(c => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td>${c.id_cupo}</td><td>${c.estado}</td><td>${c.aspirante || '-'}</td>
+              <td>
+                <button class="btn btn-sm btn-danger" onclick="deleteCupo('${c.id_cupo}')">Eliminar</button>
+              </td>`;
+            tbody.appendChild(tr);
+          });
+        }catch(e){ alert('Error: '+e.message); }
+      }
+      async function deleteCupo(id){
+        if(!confirm('Eliminar cupo '+id+'?')) return;
+        await api('/api/cupos/'+id, {method:'DELETE'});
+        loadCupos();
+      }
+
+      async function loadAspirantes(){
+        try{
+          const aspirantes = await api('/api/applicants');
+          const tbody = document.querySelector('#tableAspirantes tbody');
+          tbody.innerHTML = '';
+          aspirantes.forEach(a => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td>${a.cedula}</td><td>${a.nombre}</td><td>${a.puntaje}</td><td>${a.estado}</td>`;
+            tbody.appendChild(tr);
+          });
+        }catch(e){ alert('Error: '+e.message); }
+      }
+
+      // iniciar mostrando aspirantes
+      document.getElementById('menuAspirantes').click();
+    </script>
+  </body>
+</html>
