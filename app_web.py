@@ -53,6 +53,9 @@ def login_required(role=None):
 def find_aspirante_by_cedula(cedula):
     return next((a for a in aspirantes_list if getattr(a, "cedula", "") == cedula), None)
 
+def find_cupo_by_id(id_cupo):
+    return next((c for c in carrera_demo.cupos if str(getattr(c, 'id_cupo', '')) == str(id_cupo)), None)
+
 # ---------------------------
 # RUTAS (vistas)
 # ---------------------------
@@ -202,31 +205,89 @@ def api_aceptar():
     return jsonify({"ok": True}), 200
 
 
-@app.route("/api/rechazar", methods=["POST"])
-@login_required(role="student")
-def api_rechazar():
-    username = session["user"]["username"]
-    aspirante = find_aspirante_by_cedula(username)
+# ADMIN ACTION: asignar un cupo específico a un aspirante
+@app.route("/api/assign", methods=["POST"])
+@login_required(role="admin")
+def api_assign():
+    data = request.json or {}
+    id_cupo = data.get("id_cupo")
+    cedula = data.get("cedula")
+    if not id_cupo or not cedula:
+        return jsonify({"error": "id_cupo y cedula son requeridos"}), 400
+
+    cupo = find_cupo_by_id(id_cupo)
+    if not cupo:
+        return jsonify({"error": "Cupo no encontrado"}), 404
+    aspirante = find_aspirante_by_cedula(cedula)
     if not aspirante:
-        return jsonify({"error": "No encontrado"}), 404
-    cupo = next((c for c in carrera_demo.cupos if getattr(c, "aspirante", None) is aspirante), None)
-    if not cupo or getattr(aspirante, "estado", "") != "Asignado":
-        return jsonify({"error": "No tiene cupo asignado"}), 400
-    # marcar rechazo y liberar cupo
+        return jsonify({"error": "Aspirante no encontrado"}), 404
+
+    if getattr(cupo, "estado", "") != "Disponible":
+        return jsonify({"error": "El cupo no está disponible"}), 400
+
     try:
-        aspirante.rechazar_cupo(cupo)
+        cupo.asignar_aspirante(aspirante)
     except Exception:
-        aspirante.estado = "Rechazado"
-        aspirante.carrera_asignada = None
+        cupo.aspirante = aspirante
+        cupo.estado = "Asignado"
+
+    aspirante.carrera_asignada = carrera_demo.nombre
+    aspirante.estado = "Asignado"
+
+    repo.actualizar_estado_aspirante(aspirante, "Asignado")
+    repo.actualizar_estado_cupo(cupo, "Asignado")
+
+    return jsonify({"ok": True, "message": f"Cupo {cupo.id_cupo} asignado a {aspirante.nombre}"}), 200
+
+
+# ADMIN ACTION: liberar un cupo
+@app.route("/api/liberar", methods=["POST"])
+@login_required(role="admin")
+def api_liberar():
+    data = request.json or {}
+    id_cupo = data.get("id_cupo")
+    if not id_cupo:
+        return jsonify({"error": "id_cupo es requerido"}), 400
+    cupo = find_cupo_by_id(id_cupo)
+    if not cupo:
+        return jsonify({"error": "Cupo no encontrado"}), 404
+
     try:
         cupo.liberar()
     except Exception:
         cupo.aspirante = None
         cupo.estado = "Disponible"
-    repo.actualizar_estado_aspirante(aspirante, "Rechazado")
+
     repo.actualizar_estado_cupo(cupo, "Disponible")
-    # opcional: reasignar cupo a siguiente postulante (no implementado automáticamente aquí)
-    return jsonify({"ok": True}), 200
+    return jsonify({"ok": True, "message": f"Cupo {id_cupo} liberado"}), 200
+
+
+# ADMIN ACTION: asignación automática por mérito
+@app.route("/api/assign_auto", methods=["POST"])
+@login_required(role="admin")
+def api_assign_auto():
+    # obtener postulados
+    postulados = [a for a in aspirantes_list if getattr(a, "estado", "") == "Postulado"]
+    postulados = sorted(postulados, key=lambda x: getattr(x, "puntaje", 0), reverse=True)
+    cupos_disponibles = carrera_demo.obtener_cupos_disponibles()
+
+    asignados = []
+    for i in range(min(len(cupos_disponibles), len(postulados))):
+        aspirante = postulados[i]
+        cupo = cupos_disponibles[i]
+        try:
+            cupo.asignar_aspirante(aspirante)
+        except Exception:
+            cupo.aspirante = aspirante
+            cupo.estado = "Asignado"
+        aspirante.carrera_asignada = carrera_demo.nombre
+        aspirante.estado = "Asignado"
+        repo.actualizar_estado_aspirante(aspirante, "Asignado")
+        repo.actualizar_estado_cupo(cupo, "Asignado")
+        asignados.append({"cupo": getattr(cupo, 'id_cupo', ''), "cedula": getattr(aspirante, 'cedula', ''), "nombre": getattr(aspirante, 'nombre', '')})
+
+    return jsonify({"ok": True, "assigned": asignados}), 200
+
 
 # ---------------------------
 # Ejecutar
