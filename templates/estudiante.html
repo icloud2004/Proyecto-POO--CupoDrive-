@@ -67,6 +67,7 @@
           const res = await api('/student/cupo/accept', {method: 'POST'});
           if (res.ok) {
             if (res.report_url) {
+              // server devuelve /student/reporte/<cedula>
               window.open(res.report_url, '_blank');
             } else {
               alert('Cupo aceptado.');
