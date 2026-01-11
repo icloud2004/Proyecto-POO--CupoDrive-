@@ -3,63 +3,96 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Estudiante - CupoDrive</title>
+    <title>CupoDrive - Estudiante</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+      .badge-assigned { background:#17a2b8; color:white; }
+      .container { margin-top: 30px; }
+      .actions { margin-top: 30px; }
+    </style>
   </head>
-  <body class="bg-light">
+  <body>
     <nav class="navbar bg-primary navbar-dark">
       <div class="container-fluid">
         <a class="navbar-brand" href="#">CupoDrive - Estudiante</a>
         <div class="d-flex">
-          <span class="navbar-text text-light me-3">{{ user.name }}</span>
-          <form id="logoutForm" method="post" action="/logout"></form>
-          <button id="btnLogout" class="btn btn-outline-light btn-sm">Cerrar sesión</button>
+          <span class="navbar-text me-3 text-white">{{ user.name }}</span>
+          <form id="logoutForm" method="post" action="/logout" style="display:inline;">
+            <button class="btn btn-outline-light btn-sm">Cerrar sesión</button>
+          </form>
         </div>
       </div>
     </nav>
 
-    <div class="container py-4">
-      <h4>Mi estado de cupo</h4>
-      {% if aspirante %}
-        <div class="card mb-3">
-          <div class="card-body">
-            <p><strong>Cédula:</strong> {{ aspirante.cedula }}</p>
-            <p><strong>Nombre:</strong> {{ aspirante.nombre }}</p>
-            <p><strong>Puntaje:</strong> {{ aspirante.puntaje }}</p>
-            <p><strong>Estado:</strong> <span id="estadoBadge" class="badge bg-info">{{ aspirante.estado }}</span></p>
-            <p><strong>Carrera asignada:</strong> {{ aspirante.carrera_asignada or '-' }}</p>
-          </div>
-        </div>
+    <div class="container">
+      <h2 class="mt-4">Mi estado de cupo</h2>
 
-        <div id="actions">
-          {% if aspirante.estado == "Asignado" %}
-            <button id="btnAceptar" class="btn btn-success">Aceptar cupo</button>
-            <button id="btnRechazar" class="btn btn-danger">Rechazar cupo</button>
-          {% endif %}
+      <div class="card mt-3" style="max-width:800px;">
+        <div class="card-body">
+          <p><strong>Cédula:</strong> {{ aspirante.cedula }}</p>
+          <p><strong>Nombre:</strong> {{ aspirante.nombre }}</p>
+          <p><strong>Puntaje:</strong> {{ aspirante.puntaje }}</p>
+          <p><strong>Estado:</strong>
+            {% if aspirante.estado and aspirante.estado|lower in ['asignado','aceptado','aceptar'] %}
+              <span class="badge badge-assigned">Asignado</span>
+            {% elif aspirante.estado %}
+              <span class="badge bg-secondary">{{ aspirante.estado }}</span>
+            {% else %}
+              <span class="text-muted">Sin información</span>
+            {% endif %}
+          </p>
+          <p><strong>Carrera asignada:</strong> {{ aspirante.carrera_asignada or '—' }}</p>
         </div>
-      {% else %}
-        <div class="alert alert-warning">No se encontró tu registro. Contacta al administrador.</div>
-      {% endif %}
+      </div>
+
+      <div class="actions">
+        <button id="btnAceptarCupo" class="btn btn-success">Aceptar cupo</button>
+        <button id="btnRechazarCupo" class="btn btn-danger">Rechazar cupo</button>
+      </div>
     </div>
 
     <script>
-      async function api(path, opts){ const r = await fetch(path, opts); if(!r.ok) throw new Error(await r.text()); return r.json(); }
-      document.getElementById('btnLogout')?.addEventListener('click', async () => { await api('/logout', {method:'POST'}); window.location = '/'; });
+      async function api(path, opts) {
+        const res = await fetch(path, opts);
+        if (!res.ok) {
+          const txt = await res.text();
+          throw new Error(txt || res.statusText);
+        }
+        return res.json();
+      }
 
-      document.getElementById('btnAceptar')?.addEventListener('click', async () => {
-        try{
-          await api('/api/aceptar', {method:'POST'});
-          alert('Cupo aceptado');
-          location.reload();
-        }catch(e){ alert('Error: '+e.message); }
+      document.getElementById('btnAceptarCupo')?.addEventListener('click', async () => {
+        if (!confirm('¿Confirmas que deseas aceptar el cupo?')) return;
+        try {
+          const res = await api('/student/cupo/accept', {method: 'POST'});
+          if (res.ok) {
+            if (res.report_url) {
+              window.open(res.report_url, '_blank');
+            } else {
+              alert('Cupo aceptado.');
+            }
+            setTimeout(()=> location.reload(), 500);
+          } else {
+            alert('Error: ' + (res.error || 'No fue posible aceptar el cupo.'));
+          }
+        } catch (e) {
+          alert('Error: ' + e.message);
+        }
       });
-      document.getElementById('btnRechazar')?.addEventListener('click', async () => {
-        if(!confirm('¿Confirmas rechazo del cupo?')) return;
-        try{
-          await api('/api/rechazar', {method:'POST'});
-          alert('Cupo rechazado');
-          location.reload();
-        }catch(e){ alert('Error: '+e.message); }
+
+      document.getElementById('btnRechazarCupo')?.addEventListener('click', async () => {
+        if (!confirm('¿Confirmas que deseas rechazar el cupo?')) return;
+        try {
+          const res = await api('/student/cupo/reject', {method: 'POST'});
+          if (res.ok) {
+            alert('Cupo rechazado. El cupo ha sido liberado.');
+            setTimeout(()=> location.reload(), 500);
+          } else {
+            alert('Error: ' + (res.error || 'No fue posible rechazar el cupo.'));
+          }
+        } catch (e) {
+          alert('Error: ' + e.message);
+        }
       });
     </script>
   </body>

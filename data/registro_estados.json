@@ -1,0 +1,30 @@
+[
+  {
+    "tipo": "cupo",
+    "cupo": "349419-1",
+    "carrera": "Tecnologías de la información",
+    "nuevo_estado": "Disponible",
+    "fecha": "2026-01-11 17:02:36"
+  },
+  {
+    "tipo": "cupo",
+    "cupo": "349419-1",
+    "carrera": "Tecnologías de la información",
+    "nuevo_estado": "Disponible",
+    "fecha": "2026-01-11 17:03:00"
+  },
+  {
+    "tipo": "cupo",
+    "cupo": "349419-1",
+    "carrera": "Tecnologías de la información",
+    "nuevo_estado": "Disponible",
+    "fecha": "2026-01-11 17:03:05"
+  },
+  {
+    "tipo": "cupo",
+    "cupo": "349419-1",
+    "carrera": "Tecnologías de la información",
+    "nuevo_estado": "Eliminado",
+    "fecha": "2026-01-11 17:03:09"
+  }
+]
