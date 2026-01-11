@@ -263,6 +263,7 @@ def student_dashboard():
 # Inicialización: cargar archivos por defecto si existen
 # ---------------------------
 @app.before_first_request
+# Register data loader in a way compatible con varias versiones de Flask
 def load_default_data():
     global aspirantes_list, carreras_list, uni_global
     # Intentamos cargar BaseDatos.csv y Carreras.csv si existen en el repo
@@ -273,19 +274,43 @@ def load_default_data():
                 usr = getattr(a, "cedula", None)
                 if usr and str(usr) not in USERS:
                     USERS[str(usr)] = {"role": "student", "username": str(usr), "password": str(usr), "name": getattr(a, "nombre", "")}
+            print(f"Éxito: {len(aspirantes_list)} aspirantes listos.")
         except Exception:
-            pass
+            print("Advertencia: no se pudieron cargar los aspirantes por defecto.")
     if os.path.exists("Carreras.csv"):
         try:
-            carreras_list = CargarCarreras("Carreras.csv").cargar(as_model=True)
-            uni_global = Universidad(id_universidad="102", nombre="UNIVERSIDAD (cargada)", direccion="", telefono="", correo="", estado="Activa")
-            for c in carreras_list:
-                try:
-                    uni_global.agregar_carrera(c)
-                except Exception:
-                    pass
+            carreras_list_local = CargarCarreras("Carreras.csv").cargar(as_model=True)
+            carreras_list.extend(carreras_list_local)
+            uni_global_local = Universidad(id_universidad="102", nombre="UNIVERSIDAD (cargada)", direccion="", telefono="", correo="", estado="Activa")
+            # intentar agregar carreras a uni_global si se desea
+            try:
+                for c in carreras_list_local:
+                    try:
+                        uni_global_local.agregar_carrera(c)
+                    except Exception:
+                        pass
+                # mantener referencia global si queremos usarla
+                globals()['uni_global'] = uni_global_local
+            except Exception:
+                pass
+            print(f"Éxito: {len(carreras_list_local)} carreras cargadas por defecto.")
         except Exception:
-            pass
+            print("Advertencia: no se pudieron cargar las carreras por defecto.")
+
+# Intentamos registrar la carga automática usando before_serving o before_first_request según la versión de Flask.
+if hasattr(app, "before_serving"):
+    # Flask >= 2.0/2.3: antes de servir peticiones (asíncrono permitido)
+    @app.before_serving
+    async def _load_on_start():
+        load_default_data()
+elif hasattr(app, "before_first_request"):
+    # Versiones antiguas de Flask
+    @app.before_first_request
+    def _load_on_first():
+        load_default_data()
+else:
+    # Fallback: llamar ahora (útil si el framework no expone esos decoradores)
+    load_default_data()
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
