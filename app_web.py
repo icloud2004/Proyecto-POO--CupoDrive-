@@ -1,45 +1,46 @@
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify, abort
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify, abort, send_file
 from functools import wraps
 import os
+import io
 
-# Importar clases del repo (asegúrate de que estos módulos están en el mismo directorio)
+# Importar clases del repo
 from Cargar_datos import Cargar_datos
+from Cargar_carrera import CargarCarreras
 from Carrera import Carrera
 from Cupo import Cupo
 from Repositoriocupos import RepositorioCupos
-from Aspirante import Aspirante  # se usa para estructurar estudiantes
+from Universidad import Universidad
+from Admin import Administrador
+
+# Importar la lógica de asignación (asegúrate de que el archivo se llame Asignacion_cupos.py sin acento)
+from Asignación_cupos import Asignacion_cupo, SegmentQuotaStrategy, MeritStrategy
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("CUPODRIVE_SECRET", "dev-secret-key")  # cambiar en producción
 
 # ---------------------------
-# Datos en memoria / "backend"
+# Estado en memoria
 # ---------------------------
-# Cargar aspirantes desde CSV (BaseDatos.csv)
-loader = Cargar_datos("BaseDatos.csv")
-aspirantes_list = loader.cargar()  # lista de objetos Aspirante
+UPLOAD_DIR = "uploads"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-# Crear una carrera demo (puedes cargar varias si quieres)
-carrera_demo = Carrera(id_carrera="001", nombre="Software", oferta_cupos=50)  # oferta por defecto 50
+# Variables en memoria que el admin podrá actualizar con uploads
+carreras_list = []       # lista de instancias Carrera
+aspirantes_list = []     # lista de instancias Aspirante (o dicts según Cargar_datos)
+uni_global = None        # instancia Universidad si la quieres usar
 repo = RepositorioCupos()
 
-# Usuarios (ejemplo): admin con credenciales y estudiantes derivados de CSV.
-# En producción debes tener un sistema de usuarios real con contraseñas hashed.
+# Usuarios (ejemplo)
 USERS = {
     "admin": {"role": "admin", "username": "admin", "password": "admin123", "name": "Administrador"},
 }
-# Añadir estudiantes: usar su cédula como "usuario" y, por simplicidad, la cédula como password temporal.
-for a in aspirantes_list:
-    # usar la cédula (identificación) como username
-    usr = getattr(a, "cedula", None)
-    if usr:
-        USERS[usr] = {"role": "student", "username": usr, "password": str(usr), "name": getattr(a, "nombre", "")}
 
 # ---------------------------
 # Helpers / decoradores
 # ---------------------------
 def login_required(role=None):
     def decorator(f):
+        from functools import wraps
         @wraps(f)
         def wrapped(*args, **kwargs):
             if "user" not in session:
@@ -50,14 +51,16 @@ def login_required(role=None):
         return wrapped
     return decorator
 
-def find_aspirante_by_cedula(cedula):
-    return next((a for a in aspirantes_list if getattr(a, "cedula", "") == cedula), None)
-
-def find_cupo_by_id(id_cupo):
-    return next((c for c in carrera_demo.cupos if str(getattr(c, 'id_cupo', '')) == str(id_cupo)), None)
+def find_cupo_by_id_global(id_cupo):
+    """Busca un cupo por id en todas las carreras cargadas."""
+    for carrera in carreras_list:
+        for cupo in getattr(carrera, "cupos", []):
+            if str(getattr(cupo, "id_cupo", "")) == str(id_cupo):
+                return cupo, carrera
+    return None, None
 
 # ---------------------------
-# RUTAS (vistas)
+# RUTAS (login)
 # ---------------------------
 @app.route("/", methods=["GET", "POST"])
 def login():
@@ -66,7 +69,6 @@ def login():
         password = request.form.get("password", "").strip()
         user = USERS.get(username)
         if user and user.get("password") == password:
-            # autenticado
             session["user"] = {"username": username, "role": user["role"], "name": user.get("name", "")}
             if user["role"] == "admin":
                 return redirect(url_for("admin_dashboard"))
@@ -76,221 +78,214 @@ def login():
             return render_template("login.html", error="Credenciales inválidas")
     return render_template("login.html")
 
-
 @app.route("/logout", methods=["POST"])
 def logout():
     session.pop("user", None)
-    return jsonify({"ok": True}), 200
+    return jsonify({"ok": True})
 
-
+# ---------------------------
+# RUTAS ADMIN (UI)
+# ---------------------------
 @app.route("/admin")
 @login_required(role="admin")
 def admin_dashboard():
-    return render_template("admin.html", user=session.get("user"))
+    return render_template("admin.html", user=session.get("user", {}))
 
+# Endpoint para subir CSVs (aspirantes y carreras)
+@app.route("/admin/upload", methods=["POST"])
+@login_required(role="admin")
+def admin_upload():
+    """
+    Espera multipart form-data con campos:
+    - aspirantes: archivo CSV (BaseDatos.csv)
+    - carreras: archivo CSV (Carreras.csv)
+    Guarda en uploads/ y carga en memoria usando Cargar_datos y Cargar_carreras.
+    """
+    global aspirantes_list, carreras_list, uni_global
 
+    aspir_file = request.files.get("aspirantes")
+    carr_file = request.files.get("carreras")
+
+    if not aspir_file and not carr_file:
+        return jsonify({"error": "No se subió ningún archivo"}), 400
+
+    # Guardar y cargar aspirantes
+    if aspir_file:
+        aspir_path = os.path.join(UPLOAD_DIR, "BaseDatos.csv")
+        aspir_file.save(aspir_path)
+        try:
+            aspirantes_list = Cargar_datos(aspir_path).cargar()
+        except Exception as e:
+            return jsonify({"error": f"Error cargando aspirantes: {e}"}), 500
+
+        # Añadir a USERS (para login rápido por cédula)
+        for a in aspirantes_list:
+            usr = getattr(a, "cedula", None) or getattr(a, "identificiacion", None)
+            if usr and str(usr) not in USERS:
+                USERS[str(usr)] = {"role": "student", "username": str(usr), "password": str(usr), "name": getattr(a, "nombre", "")}
+
+    # Guardar y cargar carreras
+    if carr_file:
+        carr_path = os.path.join(UPLOAD_DIR, "Carreras.csv")
+        carr_file.save(carr_path)
+        try:
+            # Intenta cargar instancias Carrera si Cargar_carreras lo permite
+            carreras_list = CargarCarreras(carr_path).cargar(as_model=True)
+            # Si quisieras, puedes crear una Universidad para guardar periodos/carreras
+            uni_global = Universidad(id_universidad="102", nombre="UNIVERSIDAD (cargada)", direccion="", telefono="", correo="", estado="Activa")
+            for c in carreras_list:
+                try:
+                    uni_global.agregar_carrera(c)
+                except Exception:
+                    pass
+        except Exception as e:
+            return jsonify({"error": f"Error cargando carreras: {e}"}), 500
+
+    return jsonify({"ok": True})
+
+# Endpoint para lanzar asignación automática para todas las carreras
+@app.route("/admin/assign", methods=["POST"])
+@login_required(role="admin")
+def admin_assign_all():
+    """
+    Ejecuta asignación automática para cada carrera cargada.
+    - Usa SegmentQuotaStrategy por defecto (respeta segmentos y política de cuotas).
+    - Modifica estados de aspirantes y cupos en memoria.
+    """
+    global carreras_list, aspirantes_list
+    if not carreras_list or not aspirantes_list:
+        return jsonify({"error": "No hay carreras o aspirantes cargados"}), 400
+
+    resultados = {}
+    for carrera in carreras_list:
+        # crear contexto de asignación
+        contexto = Asignacion_cupo(carrera, aspirantes_list, SegmentQuotaStrategy())
+        asignados = contexto.asignar_cupos()
+        # guardamos info mínima para la UI
+        resultados[getattr(carrera, "id_carrera", getattr(carrera, "nombre", ""))] = {
+            "nombre": getattr(carrera, "nombre", ""),
+            "cupos_total": getattr(carrera, "oferta_cupos", len(getattr(carrera, "cupos", []))),
+            "asignados_count": len(asignados),
+            "asignados": [ {"cedula": getattr(a, "cedula", ""), "nombre": getattr(a, "nombre", ""), "puntaje": getattr(a, "puntaje", "")} for a in asignados ]
+        }
+
+    return jsonify({"ok": True, "resultados": resultados})
+
+# API: listar carreras
+@app.route("/api/carreras", methods=["GET"])
+@login_required(role="admin")
+def api_carreras():
+    out = []
+    for c in carreras_list:
+        cid = getattr(c, "id_carrera", "") or getattr(c, "nombre", "")
+        out.append({
+            "id": cid,
+            "nombre": getattr(c, "nombre", ""),
+            "oferta_cupos": getattr(c, "oferta_cupos", len(getattr(c, "cupos", []))),
+            "cupos_asignados": len([x for x in getattr(c, "cupos", []) if getattr(x, "estado", "") != "Disponible"])
+        })
+    return jsonify(out)
+
+# API: obtener cupos de una carrera
+@app.route("/api/carreras/<carrera_id>/cupos", methods=["GET"])
+@login_required(role="admin")
+def api_carrera_cupos(carrera_id):
+    for c in carreras_list:
+        cid = getattr(c, "id_carrera", "") or getattr(c, "nombre", "")
+        if str(cid) == str(carrera_id) or getattr(c, "nombre", "") == carrera_id:
+            cupos = []
+            for cup in getattr(c, "cupos", []):
+                aspir = getattr(cup, "aspirante", None)
+                cupos.append({
+                    "id_cupo": getattr(cup, "id_cupo", ""),
+                    "estado": getattr(cup, "estado", ""),
+                    "aspirante": {
+                        "cedula": getattr(asp, "cedula", "") if aspir else "",
+                        "nombre": getattr(asp, "nombre", "") if aspir else ""
+                    } if aspir else None
+                })
+            return jsonify({"carrera": getattr(c, "nombre", ""), "cupos": cupos})
+    return jsonify({"error": "Carrera no encontrada"}), 404
+
+# API: liberar un cupo por id
+@app.route("/api/cupos/<id_cupo>/liberar", methods=["POST"])
+@login_required(role="admin")
+def api_liberar_cupo(id_cupo):
+    cupo, carrera = find_cupo_by_id_global(id_cupo)
+    if not cupo:
+        return jsonify({"error": "Cupo no encontrado"}), 404
+    try:
+        cupo.liberar()
+        repo.actualizar_estado_cupo(cupo, "Disponible")
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# API: eliminar un cupo (lo quita de la lista)
+@app.route("/api/cupos/<id_cupo>", methods=["DELETE"])
+@login_required(role="admin")
+def api_eliminar_cupo(id_cupo):
+    cupo, carrera = find_cupo_by_id_global(id_cupo)
+    if not cupo or not carrera:
+        return jsonify({"error": "Cupo no encontrado"}), 404
+    try:
+        carrera.cupos = [c for c in carrera.cupos if str(getattr(c, "id_cupo", "")) != str(id_cupo)]
+        repo.actualizar_estado_cupo(cupo, "Eliminado")
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# Endpoint para generar reporte usando Administrador.generar_reporte
+@app.route("/admin/report", methods=["POST"])
+@login_required(role="admin")
+def admin_report():
+    # Creamos un administrador de ejemplo (puedes ajustar los datos)
+    admin = Administrador("000", "Sistema", "admin", "xxxx", "Administrador")
+    try:
+        # Generar reporte: la implementación actual imprime en consola.
+        # Para devolverlo a la UI vamos a capturar stdout si fuera necesario (aquí retornamos ok)
+        admin.generar_reporte(aspirantes_list if aspirantes_list else [])
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# ---------------------------
+# RUTAS ESTUDIANTE (simplificadas)
+# ---------------------------
 @app.route("/student")
 @login_required(role="student")
 def student_dashboard():
-    # estudiante se identifica por username en session (que es su cédula)
     username = session["user"]["username"]
-    aspirante = find_aspirante_by_cedula(username)
-    return render_template("estudiante.html", user=session.get("user"), aspirante=aspirante)
+    aspir = next((a for a in aspirantes_list if getattr(a, "cedula", "") == username), None)
+    return render_template("estudiante.html", user=session.get("user", {}), aspirante=aspir)
 
 # ---------------------------
-# API endpoints (JSON)
+# Inicialización: cargar archivos por defecto si existen
 # ---------------------------
-@app.route("/api/applicants", methods=["GET"])
-@login_required(role="admin")
-def api_applicants():
-    # devolver lista de aspirantes (serializar campos relevantes)
-    data = []
-    for a in aspirantes_list:
-        data.append({
-            "cedula": getattr(a, "cedula", ""),
-            "nombre": getattr(a, "nombre", ""),
-            "puntaje": getattr(a, "puntaje", 0),
-            "estado": getattr(a, "estado", ""),
-            "vulnerabilidad": getattr(a, "vulnerabilidad", ""),
-            "carrera_asignada": getattr(a, "carrera_asignada", ""),
-        })
-    return jsonify(data)
-
-
-@app.route("/api/cupos", methods=["GET"])
-@login_required(role="admin")
-def api_cupos_list():
-    # Lista cupos para la carrera_demo
-    cups = []
-    for c in carrera_demo.cupos:
-        aspir = c.aspirante
-        cups.append({
-            "id_cupo": getattr(c, "id_cupo", ""),
-            "carrera": getattr(c, "carrera", ""),
-            "estado": getattr(c, "estado", ""),
-            "aspirante": getattr(aspir, "nombre", "") if aspir else None,
-            "aspirante_cedula": getattr(aspir, "cedula", "") if aspir else None,
-            "segmento": getattr(c, "segmento", None),
-        })
-    return jsonify(cups)
-
-
-@app.route("/api/cupos", methods=["POST"])
-@login_required(role="admin")
-def api_cupos_create():
-    # Crear N cupos adicionales o uno nuevo con id específico
-    data = request.json or {}
-    cantidad = int(data.get("cantidad", 1))
-    # crear cupos con ids incrementales
-    start = len(carrera_demo.cupos) + 1
-    for i in range(cantidad):
-        cid = f"{carrera_demo.id_carrera}-{start + i}"
-        carrera_demo.cupos.append(Cupo(id_cupo=cid, carrera=carrera_demo.nombre))
-    return jsonify({"ok": True, "total_cupos": len(carrera_demo.cupos)}), 201
-
-
-@app.route("/api/cupos/<id_cupo>", methods=["DELETE"])
-@login_required(role="admin")
-def api_cupos_delete(id_cupo):
-    # eliminar cupo (si existe) y devolver nuevo total
-    before = len(carrera_demo.cupos)
-    carrera_demo.cupos = [c for c in carrera_demo.cupos if str(c.id_cupo) != str(id_cupo)]
-    after = len(carrera_demo.cupos)
-    return jsonify({"ok": True, "removed": before - after, "total_cupos": after}), 200
-
-
-@app.route("/api/aspirante/<cedula>", methods=["GET"])
-@login_required()
-def api_aspirante(cedula):
-    # admin o student pueden consultar; si student, solo su propia cedula permitida
-    if session["user"]["role"] == "student" and session["user"]["username"] != cedula:
-        return abort(403)
-    a = find_aspirante_by_cedula(cedula)
-    if not a:
-        return jsonify({"error": "No encontrado"}), 404
-    return jsonify({
-        "cedula": getattr(a, "cedula", ""),
-        "nombre": getattr(a, "nombre", ""),
-        "puntaje": getattr(a, "puntaje", 0),
-        "estado": getattr(a, "estado", ""),
-        "carrera_asignada": getattr(a, "carrera_asignada", ""),
-        "vulnerabilidad": getattr(a, "vulnerabilidad", ""),
-        "fecha_inscripcion": getattr(a, "fecha_inscripcion", "")
-    })
-
-
-@app.route("/api/aceptar", methods=["POST"])
-@login_required(role="student")
-def api_aceptar():
-    # El estudiante en sesión acepta su cupo
-    username = session["user"]["username"]
-    aspirante = find_aspirante_by_cedula(username)
-    if not aspirante:
-        return jsonify({"error": "No encontrado"}), 404
-    # buscar cupo asignado al aspirante
-    cupo = next((c for c in carrera_demo.cupos if getattr(c, "aspirante", None) is aspirante), None)
-    if not cupo or getattr(aspirante, "estado", "") != "Asignado":
-        return jsonify({"error": "No tiene cupo asignado"}), 400
-    # cambios de estado usando métodos de tus clases
-    try:
-        cupo.aceptar()
-    except Exception:
-        cupo.estado = "Aceptado"
-    try:
-        aspirante.aceptar_cupo(cupo)
-    except Exception:
-        aspirante.estado = "Aceptado"
-        aspirante.carrera_asignada = cupo.carrera
-    repo.registrar_aceptacion(aspirante, cupo, "GUI")
-    return jsonify({"ok": True}), 200
-
-
-# ADMIN ACTION: asignar un cupo específico a un aspirante
-@app.route("/api/assign", methods=["POST"])
-@login_required(role="admin")
-def api_assign():
-    data = request.json or {}
-    id_cupo = data.get("id_cupo")
-    cedula = data.get("cedula")
-    if not id_cupo or not cedula:
-        return jsonify({"error": "id_cupo y cedula son requeridos"}), 400
-
-    cupo = find_cupo_by_id(id_cupo)
-    if not cupo:
-        return jsonify({"error": "Cupo no encontrado"}), 404
-    aspirante = find_aspirante_by_cedula(cedula)
-    if not aspirante:
-        return jsonify({"error": "Aspirante no encontrado"}), 404
-
-    if getattr(cupo, "estado", "") != "Disponible":
-        return jsonify({"error": "El cupo no está disponible"}), 400
-
-    try:
-        cupo.asignar_aspirante(aspirante)
-    except Exception:
-        cupo.aspirante = aspirante
-        cupo.estado = "Asignado"
-
-    aspirante.carrera_asignada = carrera_demo.nombre
-    aspirante.estado = "Asignado"
-
-    repo.actualizar_estado_aspirante(aspirante, "Asignado")
-    repo.actualizar_estado_cupo(cupo, "Asignado")
-
-    return jsonify({"ok": True, "message": f"Cupo {cupo.id_cupo} asignado a {aspirante.nombre}"}), 200
-
-
-# ADMIN ACTION: liberar un cupo
-@app.route("/api/liberar", methods=["POST"])
-@login_required(role="admin")
-def api_liberar():
-    data = request.json or {}
-    id_cupo = data.get("id_cupo")
-    if not id_cupo:
-        return jsonify({"error": "id_cupo es requerido"}), 400
-    cupo = find_cupo_by_id(id_cupo)
-    if not cupo:
-        return jsonify({"error": "Cupo no encontrado"}), 404
-
-    try:
-        cupo.liberar()
-    except Exception:
-        cupo.aspirante = None
-        cupo.estado = "Disponible"
-
-    repo.actualizar_estado_cupo(cupo, "Disponible")
-    return jsonify({"ok": True, "message": f"Cupo {id_cupo} liberado"}), 200
-
-
-# ADMIN ACTION: asignación automática por mérito
-@app.route("/api/assign_auto", methods=["POST"])
-@login_required(role="admin")
-def api_assign_auto():
-    # obtener postulados
-    postulados = [a for a in aspirantes_list if getattr(a, "estado", "") == "Postulado"]
-    postulados = sorted(postulados, key=lambda x: getattr(x, "puntaje", 0), reverse=True)
-    cupos_disponibles = carrera_demo.obtener_cupos_disponibles()
-
-    asignados = []
-    for i in range(min(len(cupos_disponibles), len(postulados))):
-        aspirante = postulados[i]
-        cupo = cupos_disponibles[i]
+@app.before_first_request
+def load_default_data():
+    global aspirantes_list, carreras_list, uni_global
+    # Intentamos cargar BaseDatos.csv y Carreras.csv si existen en el repo
+    if os.path.exists("BaseDatos.csv"):
         try:
-            cupo.asignar_aspirante(aspirante)
+            aspirantes_list = Cargar_datos("BaseDatos.csv").cargar()
+            for a in aspirantes_list:
+                usr = getattr(a, "cedula", None)
+                if usr and str(usr) not in USERS:
+                    USERS[str(usr)] = {"role": "student", "username": str(usr), "password": str(usr), "name": getattr(a, "nombre", "")}
         except Exception:
-            cupo.aspirante = aspirante
-            cupo.estado = "Asignado"
-        aspirante.carrera_asignada = carrera_demo.nombre
-        aspirante.estado = "Asignado"
-        repo.actualizar_estado_aspirante(aspirante, "Asignado")
-        repo.actualizar_estado_cupo(cupo, "Asignado")
-        asignados.append({"cupo": getattr(cupo, 'id_cupo', ''), "cedula": getattr(aspirante, 'cedula', ''), "nombre": getattr(aspirante, 'nombre', '')})
+            pass
+    if os.path.exists("Carreras.csv"):
+        try:
+            carreras_list = CargarCarreras("Carreras.csv").cargar(as_model=True)
+            uni_global = Universidad(id_universidad="102", nombre="UNIVERSIDAD (cargada)", direccion="", telefono="", correo="", estado="Activa")
+            for c in carreras_list:
+                try:
+                    uni_global.agregar_carrera(c)
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
-    return jsonify({"ok": True, "assigned": asignados}), 200
-
-
-# ---------------------------
-# Ejecutar
-# ---------------------------
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
