@@ -102,6 +102,33 @@ class LotteryStrategy(AssignmentStrategy):
 
 class SegmentQuotaStrategy(AssignmentStrategy):
 
+    def __init__(self):
+        super().__init__()
+
+    def _es_politica(self, seg):
+        """
+        Detecta si un segmento representa 'Política de Cuotas' por su nombre.
+        """
+        nombre = getattr(seg, "nombre", "") or (seg.get("nombre") if isinstance(seg, dict) else "")
+        nombre = str(nombre).lower()
+        return ("política" in nombre) or ("politica" in nombre) or ("cuota" in nombre)
+
+    def _obtener_prioridad(self, a):
+        """
+        Intenta obtener la prioridad del aspirante de varias formas.
+        Devuelve int (mayor valor = peor prioridad). Si no está -> 999
+        """
+        p = getattr(a, "prioridad", None)
+        try:
+            if p is None:
+                p = int(getattr(a, "prioridad", 999))
+            return int(p)
+        except Exception:
+            try:
+                return int(float(str(p)))
+            except Exception:
+                return 999
+
     def assign(self, carrera, aspirantes):
         cupos = [c for c in carrera.cupos if c.estado == "Disponible"]
         oferta = getattr(carrera, "oferta_cupos", len(cupos))
@@ -111,11 +138,30 @@ class SegmentQuotaStrategy(AssignmentStrategy):
         for seg in getattr(carrera, "segmentos", []):
             cuota = seg.calcular_cupos_total(oferta)
 
-            candidatos = [
-                a for a in aspirantes
-                if seg.verificar_criterios(a)
-                and getattr(a, "estado", "") == "Postulado"
-            ]
+            # FILTRADO MEJORADO: si el segmento es "Política de Cuotas" exigimos prioridad > 1
+            candidatos = []
+            for a in aspirantes:
+                if getattr(a, "estado", "") != "Postulado":
+                    continue
+                try:
+                    cumple = seg.verificar_criterios(a)
+                except Exception:
+                    # si seg.verificar_criterios falla por estructura del aspirante, asumimos False
+                    cumple = False
+                if not cumple:
+                    continue
+
+                if self._es_politica(seg):
+                    # filtro estricto para política de cuotas:
+                    # - prioridad > 1 OR tipo_cupo == 2 OR segmento==2 (según datos CSV)
+                    prioridad = self._obtener_prioridad(a)
+                    tipo_cupo = getattr(a, "tipo_cupo", None) or getattr(a, "segmento", None) or ""
+                    tipo_cupo_str = str(tipo_cupo).strip()
+                    if not (prioridad > 1 or tipo_cupo_str == "2"):
+                        # no cumple la política de cuotas
+                        continue
+
+                candidatos.append(a)
 
             candidatos = sorted(
                 candidatos,
@@ -193,11 +239,13 @@ class Asignacion_cupo:
 if __name__ == "__main__":
 
     class Aspirante:
-        def __init__(self, nombre, puntaje):
+        def __init__(self, nombre, puntaje, prioridad=1, tipo_cupo=None):
             self.nombre = nombre
             self.puntaje = puntaje
             self.estado = "Postulado"
             self.carrera_asignada = None
+            self.prioridad = prioridad
+            self.tipo_cupo = tipo_cupo
 
     class Carrera:
         def __init__(self, nombre, n):
@@ -206,18 +254,25 @@ if __name__ == "__main__":
                 Cupo(i + 1, nombre, "Disponible", "G", "2025A")
                 for i in range(n)
             ]
+            self.oferta_cupos = n
+            # ejemplo de segmentos: merito + politica
+            from Segmento import Segmento
+            self.segmentos = [
+                Segmento("Mérito Académico", 70, ["puntaje >= 850"]),
+                Segmento("Política de Cuotas", 30, ["prioridad > 1"])
+            ]
 
         def obtener_cupos_disponibles(self):
             return [c for c in self.cupos if c.estado == "Disponible"]
 
     aspirantes = [
-        Aspirante("Ana", 900),
-        Aspirante("Luis", 900),
-        Aspirante("Carlos", 880),
-        Aspirante("Maria", 870)
+        Aspirante("Ana", 900, prioridad=1),
+        Aspirante("Luis", 900, prioridad=2, tipo_cupo="2"),
+        Aspirante("Carlos", 880, prioridad=2),
+        Aspirante("Maria", 870, prioridad=1)
     ]
 
     carrera = Carrera("Software", 2)
 
-    contexto = Asignacion_cupo(carrera, aspirantes, MeritStrategy())
+    contexto = Asignacion_cupo(carrera, aspirantes, SegmentQuotaStrategy())
     contexto.asignar_cupos()
