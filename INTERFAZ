@@ -1,0 +1,302 @@
+import tkinter as tk
+from tkinter import ttk, messagebox, simpledialog
+from datetime import datetime
+
+# Importar clases del repo (deben estar en el mismo directorio)
+from Cargar_datos import Cargar_datos
+from Carrera import Carrera
+from Cupo import Cupo
+from Repositoriocupos import RepositorioCupos
+
+# Nota: usamos la clase Aspirante que crea Cargar_datos, así no importamos Aspirante directamente aquí.
+# Si necesitas importarla: from Aspirante import Aspirante
+
+
+class CupoDriveApp(tk.Tk):
+    def __init__(self):
+        super().__init__()
+        self.title("CupoDrive - Demo Tkinter")
+        self.geometry("900x520")
+
+        # Datos y objetos del sistema
+        self.aspirantes = []  # lista de objetos Aspirante
+        self.carrera = None   # objeto Carrera (para demo usamos una sola carrera)
+        self.repo = RepositorioCupos()
+
+        # UI
+        self._build_ui()
+
+    def _build_ui(self):
+        # Top controls
+        frame_top = ttk.Frame(self)
+        frame_top.pack(fill="x", padx=8, pady=6)
+
+        btn_load = ttk.Button(frame_top, text="Cargar datos (CSV)", command=self.load_data)
+        btn_load.pack(side="left", padx=4)
+
+        ttk.Label(frame_top, text="Cupos carrera:").pack(side="left", padx=(12, 4))
+        self.entry_cupos = ttk.Entry(frame_top, width=5)
+        self.entry_cupos.insert(0, "5")
+        self.entry_cupos.pack(side="left")
+
+        btn_assign = ttk.Button(frame_top, text="Asignar cupos (mérito)", command=self.assign_by_merit)
+        btn_assign.pack(side="left", padx=6)
+
+        btn_refresh = ttk.Button(frame_top, text="Refrescar lista", command=self.refresh_tree)
+        btn_refresh.pack(side="left", padx=6)
+
+        # Treeview aspirantes
+        cols = ("cedula", "nombre", "puntaje", "estado", "carrera_asignada")
+        self.tree = ttk.Treeview(self, columns=cols, show="headings", selectmode="browse")
+        self.tree.heading("cedula", text="Cédula")
+        self.tree.heading("nombre", text="Nombre")
+        self.tree.heading("puntaje", text="Puntaje")
+        self.tree.heading("estado", text="Estado")
+        self.tree.heading("carrera_asignada", text="Carrera asignada")
+        self.tree.column("nombre", width=260)
+        self.tree.column("puntaje", width=80, anchor="center")
+        self.tree.column("estado", width=100, anchor="center")
+        self.tree.pack(fill="both", expand=True, padx=8, pady=(0, 6))
+        self.tree.bind("<<TreeviewSelect>>", self.on_select_aspirante)
+
+        # Right side detail + actions
+        frame_bottom = ttk.Frame(self)
+        frame_bottom.pack(fill="x", padx=8, pady=6)
+
+        # Details
+        details = ttk.LabelFrame(frame_bottom, text="Detalles aspirante")
+        details.pack(side="left", fill="both", expand=True)
+
+        self.lbl_details = tk.Text(details, width=45, height=8, wrap="word")
+        self.lbl_details.pack(fill="both", padx=6, pady=6)
+
+        # Actions
+        actions = ttk.LabelFrame(frame_bottom, text="Acciones")
+        actions.pack(side="right", fill="y", padx=(8, 0))
+
+        btn_accept = ttk.Button(actions, text="Aceptar cupo", command=self.accept_cupo)
+        btn_accept.pack(fill="x", padx=8, pady=(8, 4))
+
+        btn_reject = ttk.Button(actions, text="Rechazar cupo", command=self.reject_cupo)
+        btn_reject.pack(fill="x", padx=8, pady=4)
+
+        btn_show_cupos = ttk.Button(actions, text="Mostrar cupos de la carrera", command=self.show_cupos)
+        btn_show_cupos.pack(fill="x", padx=8, pady=4)
+
+        btn_show_reg = ttk.Button(actions, text="Mostrar registros (repo)", command=self.show_registros)
+        btn_show_reg.pack(fill="x", padx=8, pady=(4, 8))
+
+    def load_data(self):
+        loader = Cargar_datos("BaseDatos.csv")
+        aspirantes = loader.cargar()
+        if not aspirantes:
+            messagebox.showwarning("Carga", "No se cargaron aspirantes (archivo no encontrado o vacío).")
+            return
+        self.aspirantes = aspirantes
+        messagebox.showinfo("Carga", f"Cargados {len(self.aspirantes)} aspirantes.")
+        self.refresh_tree()
+
+    def refresh_tree(self):
+        # limpiar tree
+        for r in self.tree.get_children():
+            self.tree.delete(r)
+        # insertar
+        for a in self.aspirantes:
+            ced = getattr(a, "cedula", "")
+            nombre = getattr(a, "nombre", "")
+            puntaje = getattr(a, "puntaje", "")
+            estado = getattr(a, "estado", "")
+            car = getattr(a, "carrera_asignada", "") or ""
+            self.tree.insert("", "end", iid=ced, values=(ced, nombre, puntaje, estado, car))
+
+    def _ensure_carrera(self):
+        # Crear carrera de demo si no existe
+        if self.carrera is None:
+            try:
+                n = int(self.entry_cupos.get())
+            except Exception:
+                n = 5
+            # id y nombre para demo
+            self.carrera = Carrera(id_carrera="001", nombre="Software", oferta_cupos=n)
+        return self.carrera
+
+    def assign_by_merit(self):
+        if not self.aspirantes:
+            messagebox.showwarning("Asignación", "Primero carga los datos (CSV).")
+            return
+
+        carrera = self._ensure_carrera()
+        # obtener postulados
+        postulados = [a for a in self.aspirantes if getattr(a, "estado", "") == "Postulado"]
+        # ordenar por puntaje (desc)
+        postulados = sorted(postulados, key=lambda x: getattr(x, "puntaje", 0), reverse=True)
+        cupos_disponibles = carrera.obtener_cupos_disponibles()
+
+        cantidad = min(len(cupos_disponibles), len(postulados))
+        if cantidad == 0:
+            messagebox.showinfo("Asignación", "No hay cupos disponibles o no hay postulados.")
+            return
+
+        asignados = []
+        for i in range(cantidad):
+            aspirante = postulados[i]
+            cupo = cupos_disponibles[i]
+            cupo.asignar_aspirante(aspirante)  # actualiza estado cupo
+            aspirante.carrera_asignada = carrera.nombre
+            aspirante.estado = "Asignado"
+            asignados.append(aspirante)
+            # registrar en repo estados intermedios
+            self.repo.actualizar_estado_aspirante(aspirante, "Asignado")
+            self.repo.actualizar_estado_cupo(cupo, "Asignado")
+
+        self.refresh_tree()
+        messagebox.showinfo("Asignación", f"Asignados {len(asignados)} aspirantes por mérito.")
+
+    def on_select_aspirante(self, event):
+        sel = self.tree.selection()
+        if not sel:
+            return
+        ced = sel[0]
+        aspirante = next((a for a in self.aspirantes if getattr(a, "cedula", "") == ced), None)
+        if not aspirante:
+            return
+        # mostrar detalles
+        lines = []
+        lines.append(f"Cédula: {getattr(aspirante, 'cedula', '')}")
+        lines.append(f"Nombre: {getattr(aspirante, 'nombre', '')}")
+        lines.append(f"Puntaje: {getattr(aspirante, 'puntaje', '')}")
+        lines.append(f"Estado: {getattr(aspirante, 'estado', '')}")
+        lines.append(f"Vulnerabilidad: {getattr(aspirante, 'vulnerabilidad', '')}")
+        lines.append(f"Carrera asignada: {getattr(aspirante, 'carrera_asignada', '')}")
+        # buscar cupo si tiene asignado
+        cupo = self.find_cupo_por_aspirante(aspirante)
+        if cupo:
+            lines.append(f"\nCupo ID: {getattr(cupo, 'id_cupo', '')}")
+            lines.append(f"Cupo estado: {getattr(cupo, 'estado', '')}")
+        self.lbl_details.delete("1.0", tk.END)
+        self.lbl_details.insert(tk.END, "\n".join(lines))
+
+    def find_cupo_por_aspirante(self, aspirante):
+        if not self.carrera:
+            return None
+        for c in self.carrera.cupos:
+            if getattr(c, "aspirante", None) is aspirante:
+                return c
+        return None
+
+    def accept_cupo(self):
+        sel = self.tree.selection()
+        if not sel:
+            messagebox.showwarning("Aceptar", "Seleccione un aspirante en la lista.")
+            return
+        ced = sel[0]
+        aspirante = next((a for a in self.aspirantes if getattr(a, "cedula", "") == ced), None)
+        if not aspirante:
+            return
+        if getattr(aspirante, "estado", "") != "Asignado":
+            messagebox.showwarning("Aceptar", "El aspirante no tiene un cupo asignado.")
+            return
+        cupo = self.find_cupo_por_aspirante(aspirante)
+        if not cupo:
+            messagebox.showerror("Aceptar", "No se encontró el cupo asociado.")
+            return
+        # Aceptar cupo (métodos de clase)
+        try:
+            cupo.aceptar()
+        except Exception:
+            pass
+        # Aspirante posee método aceptar_cupo en tu clase Aspirante
+        try:
+            aspirante.aceptar_cupo(cupo)
+        except Exception:
+            # fallback si la firma es distinta
+            aspirante.estado = "Aceptado"
+            aspirante.carrera_asignada = cupo.carrera
+        fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        self.repo.registrar_aceptacion(aspirante, cupo, fecha)
+        self.repo.actualizar_estado_aspirante(aspirante, "Aceptado")
+        self.repo.actualizar_estado_cupo(cupo, "Aceptado")
+        self.refresh_tree()
+        messagebox.showinfo("Aceptar", f"{aspirante.nombre} aceptó el cupo {cupo.id_cupo}.")
+
+    def reject_cupo(self):
+        sel = self.tree.selection()
+        if not sel:
+            messagebox.showwarning("Rechazar", "Seleccione un aspirante en la lista.")
+            return
+        ced = sel[0]
+        aspirante = next((a for a in self.aspirantes if getattr(a, "cedula", "") == ced), None)
+        if not aspirante:
+            return
+        if getattr(aspirante, "estado", "") != "Asignado":
+            messagebox.showwarning("Rechazar", "El aspirante no tiene un cupo asignado.")
+            return
+        cupo = self.find_cupo_por_aspirante(aspirante)
+        if not cupo:
+            messagebox.showerror("Rechazar", "No se encontró el cupo asociado.")
+            return
+
+        # Rechazar: marcar aspirante, liberar cupo, actualizar repo
+        try:
+            aspirante.rechazar_cupo(cupo)
+        except Exception:
+            aspirante.estado = "Rechazado"
+            aspirante.carrera_asignada = None
+        try:
+            cupo.liberar()
+        except Exception:
+            cupo.estado = "Disponible"
+            cupo.aspirante = None
+
+        self.repo.actualizar_estado_aspirante(aspirante, "Rechazado")
+        self.repo.actualizar_estado_cupo(cupo, "Disponible")
+
+        # Intentar reasignar solo este cupo (por mérito)
+        siguiente = self._find_next_postulante_excluding_assigned()
+        if siguiente:
+            cupo.asignar_aspirante(siguiente)
+            siguiente.carrera_asignada = self.carrera.nombre
+            siguiente.estado = "Asignado"
+            self.repo.actualizar_estado_aspirante(siguiente, "Asignado")
+            self.repo.actualizar_estado_cupo(cupo, "Asignado")
+            msg = f"Cupo {cupo.id_cupo} reasignado a {siguiente.nombre}."
+        else:
+            msg = f"Cupo {cupo.id_cupo} quedó disponible; no hay postulantes restantes."
+
+        self.refresh_tree()
+        messagebox.showinfo("Rechazar", f"{aspirante.nombre} rechazó el cupo.\n{msg}")
+
+    def _find_next_postulante_excluding_assigned(self):
+        # devuelve el siguiente postulante (postulado) no asignado por puntaje
+        postulados = [a for a in self.aspirantes if getattr(a, "estado", "") == "Postulado"]
+        if not postulados:
+            return None
+        postulados = sorted(postulados, key=lambda x: getattr(x, "puntaje", 0), reverse=True)
+        return postulados[0]
+
+    def show_cupos(self):
+        if not self.carrera:
+            messagebox.showinfo("Cupos", "No existe carrera aún (asignar primero).")
+            return
+        texto = []
+        for c in self.carrera.cupos:
+            aspir = getattr(c, "aspirante", None)
+            nom = aspir.nombre if aspir else "-"
+            texto.append(f"Cupo {c.id_cupo} | Estado: {c.estado} | Aspirante: {nom}")
+        messagebox.showinfo("Cupos carrera", "\n".join(texto))
+
+    def show_registros(self):
+        # muestra registros guardados en RepositorioCupos
+        lines = []
+        lines.append("Historial estados:")
+        for r in self.repo.registro_estados:
+            lines.append(str(r))
+        lines.append("\nAceptaciones:")
+        for a in self.repo.aceptaciones:
+            lines.append(str(a))
+        messagebox.showinfo("Registro (repo)", "\n".join(lines) if len(lines) > 1 else "Sin registros")
+
+
+if __name__ == "__main__":
+    app = CupoDriveApp()
+    app.mainloop()
