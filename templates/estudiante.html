@@ -17,8 +17,10 @@
         <a class="navbar-brand" href="#">CupoDrive - Estudiante</a>
         <div class="d-flex">
           <span class="navbar-text me-3 text-white">{{ user.name }}</span>
-          <form id="logoutForm" method="post" action="/logout" style="display:inline;">
-            <button class="btn btn-outline-light btn-sm">Cerrar sesión</button>
+
+          <!-- Formulario de logout interceptado por JS (no enviamos POST normal) -->
+          <form id="logoutForm" style="display:inline;">
+            <button type="submit" class="btn btn-outline-light btn-sm">Cerrar sesión</button>
           </form>
         </div>
       </div>
@@ -52,47 +54,82 @@
     </div>
 
     <script>
-      async function api(path, opts) {
-        const res = await fetch(path, opts);
-        if (!res.ok) {
-          const txt = await res.text();
-          throw new Error(txt || res.statusText);
+      // fetch helper que incluye cookies y parsea respuestas JSON/text
+      async function api(path, opts = {}) {
+        const fetchOpts = Object.assign({ credentials: 'include' }, opts);
+        try {
+          const res = await fetch(path, fetchOpts);
+          const text = await res.text();
+          let data = null;
+          try { data = text ? JSON.parse(text) : null; } catch (e) { data = null; }
+          if (!res.ok) {
+            if (data && data.error) throw new Error(data.error);
+            throw new Error(text || res.statusText || 'Error en la petición');
+          }
+          return data;
+        } catch (e) {
+          throw new Error(e.message || 'Error conectando con el servidor');
         }
-        return res.json();
       }
 
+      // Aceptar cupo
       document.getElementById('btnAceptarCupo')?.addEventListener('click', async () => {
         if (!confirm('¿Confirmas que deseas aceptar el cupo?')) return;
         try {
-          const res = await api('/student/cupo/accept', {method: 'POST'});
-          if (res.ok) {
+          const res = await api('/student/cupo/accept', { method: 'POST' });
+          if (res && res.ok) {
             if (res.report_url) {
-              // server devuelve /student/reporte/<cedula>
+              // El servidor devuelve la ruta del reporte (ej. /student/reporte/<cedula>)
               window.open(res.report_url, '_blank');
             } else {
               alert('Cupo aceptado.');
             }
-            setTimeout(()=> location.reload(), 500);
+            setTimeout(() => location.reload(), 500);
           } else {
-            alert('Error: ' + (res.error || 'No fue posible aceptar el cupo.'));
+            alert('Error: ' + (res && res.error ? res.error : 'No fue posible aceptar el cupo.'));
           }
         } catch (e) {
-          alert('Error: ' + e.message);
+          alert('Error al aceptar el cupo: ' + e.message);
+          console.error('accept error', e);
         }
       });
 
+      // Rechazar cupo
       document.getElementById('btnRechazarCupo')?.addEventListener('click', async () => {
         if (!confirm('¿Confirmas que deseas rechazar el cupo?')) return;
         try {
-          const res = await api('/student/cupo/reject', {method: 'POST'});
-          if (res.ok) {
-            alert('Cupo rechazado. El cupo ha sido liberado.');
-            setTimeout(()=> location.reload(), 500);
+          const res = await api('/student/cupo/reject', { method: 'POST' });
+          if (res && res.ok) {
+            alert(res.message || 'Cupo rechazado. El cupo ha sido liberado.');
+            setTimeout(() => location.reload(), 500);
           } else {
-            alert('Error: ' + (res.error || 'No fue posible rechazar el cupo.'));
+            alert('Error: ' + (res && res.error ? res.error : 'No fue posible rechazar el cupo.'));
           }
         } catch (e) {
-          alert('Error: ' + e.message);
+          alert('Error al rechazar el cupo: ' + e.message);
+          console.error('reject error', e);
+        }
+      });
+
+      // Interceptar submit del formulario de logout para evitar que el navegador muestre el JSON
+      document.getElementById('logoutForm')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        try {
+          const res = await fetch('/logout', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Accept': 'application/json' }
+          });
+          if (res.ok) {
+            // Redirigir al login / inicio
+            window.location = '/';
+          } else {
+            const txt = await res.text();
+            alert('Error cerrando sesión: ' + (txt || res.statusText));
+          }
+        } catch (err) {
+          console.error('Logout error:', err);
+          alert('No se pudo cerrar sesión. Revisa la consola del servidor.');
         }
       });
     </script>
