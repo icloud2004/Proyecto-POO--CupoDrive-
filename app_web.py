@@ -261,8 +261,7 @@ def student_dashboard():
 
 # ---------------------------
 # Inicialización: cargar archivos por defecto si existen
-# ---------------------------
-@app.before_first_request
+# --------------------------
 # Register data loader in a way compatible con varias versiones de Flask
 def load_default_data():
     global aspirantes_list, carreras_list, uni_global
