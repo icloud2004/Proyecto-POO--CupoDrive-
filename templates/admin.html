@@ -65,7 +65,7 @@
           <h4>Lista de Aspirantes</h4>
           <table class="table table-sm" id="tableAspirantes">
             <thead><tr><th>Cédula</th><th>Nombre</th><th>Puntaje</th><th>Estado</th></tr></thead>
-            <tbody></tbody>
+            <tbody><tr><td colspan="4">Carga los aspirantes para ver la lista.</td></tr></tbody>
           </table>
         </div>
 
@@ -226,7 +226,6 @@
       // Eliminar todos los cupos de una carrera (acción peligrosa)
       async function eliminarCuposCarrera(carreraId) {
         if (!confirm('¿Eliminar todos los cupos de esta carrera?')) return;
-        // Se eliminarán individualmente (no hay endpoint para bulk), así que pedimos la lista y borramos cada uno.
         try {
           const res = await api('/api/carreras/' + encodeURIComponent(carreraId) + '/cupos');
           for (const c of res.cupos) {
@@ -241,10 +240,29 @@
 
       // Load aspirantes into table
       async function loadAspirantes(){
-        // Si quieres, puedes añadir un endpoint que devuelva aspirantes; por ahora intentamos usar /admin/assign response or we show local upload file
-        // Para simplicidad: avisamos al admin que use la subida para visualizar aspirantes
-        const tbody = document.querySelector('#tableAspirantes tbody');
-        tbody.innerHTML = '<tr><td colspan="4">Carga los aspirantes para ver la lista.</td></tr>';
+        try {
+          const data = await api('/api/aspirantes');
+          const tbody = document.querySelector('#tableAspirantes tbody');
+          tbody.innerHTML = '';
+          if (!data || !data.length) {
+            tbody.innerHTML = '<tr><td colspan="4">No hay aspirantes cargados. Sube BaseDatos.csv desde "Subir CSV".</td></tr>';
+            return;
+          }
+          for (const a of data) {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+              <td>${a.cedula || ''}</td>
+              <td>${a.nombre || ''}</td>
+              <td>${a.puntaje || ''}</td>
+              <td>${a.estado || ''}</td>
+            `;
+            tbody.appendChild(tr);
+          }
+        } catch (e) {
+          console.error('Error cargando aspirantes:', e);
+          const tbody = document.querySelector('#tableAspirantes tbody');
+          tbody.innerHTML = '<tr><td colspan="4">Error cargando aspirantes. Revisa la consola del servidor.</td></tr>';
+        }
       }
 
       // Inicializar vista: mostrar upload

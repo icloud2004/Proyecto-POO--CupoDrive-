@@ -249,6 +249,35 @@ def admin_report():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route("/api/aspirantes", methods=["GET"])
+@login_required(role="admin")
+def api_aspirantes():
+    """
+    Devuelve la lista de aspirantes cargados en memoria (aspirantes_list)
+    en formato JSON amigable para la UI.
+    Maneja tanto objetos (con atributos) como diccionarios.
+    """
+    out = []
+    for a in aspirantes_list:
+        # Soportar objetos con atributos o dicts
+        if isinstance(a, dict):
+            cedula = a.get("identificiacion") or a.get("identificacion") or a.get("cedula") or a.get("ident")
+            nombre = (a.get("nombres") or "") + " " + (a.get("apellidos") or "")
+            puntaje = a.get("puntaje_postulacion") or a.get("puntaje") or a.get("puntaje_postulacion")
+            estado = a.get("acepta_estado") or a.get("estado") or a.get("estado_postulacion") or ""
+        else:
+            cedula = getattr(a, "cedula", getattr(a, "identificiacion", ""))
+            nombre = getattr(a, "nombre", "") or (getattr(a, "nombres", "") + " " + getattr(a, "apellidos", ""))
+            puntaje = getattr(a, "puntaje", getattr(a, "puntaje_postulacion", ""))
+            estado = getattr(a, "estado", "")
+        out.append({
+            "cedula": str(cedula or ""),
+            "nombre": (nombre or "").strip(),
+            "puntaje": puntaje or "",
+            "estado": estado or ""
+        })
+    return jsonify(out)
+
 # ---------------------------
 # RUTAS ESTUDIANTE (simplificadas)
 # ---------------------------
