@@ -36,20 +36,9 @@ class Cargar_datos:
                     ) = fila
 
                     aspirante = Aspirante(
-                        ies_id=ies_id,
-                        ies_nombre=ies_nombre,
                         cedula=identificacion,
                         nombre=f"{nombres} {apellidos}",
                         puntaje=float(puntaje_postulacion),
-                        prioridad=int(prioridad),
-                        carrera=nombre_carrera,
-                        campus=campus,
-                        tipo_cupo=tipo_cupo,
-                        modalidad=modalidad,
-                        nivel=nivel,
-                        jornada=jornada,
-                        acepta_estado=acepta_estado,
-                        fecha_acepta_cupo=fecha_acepta_cupo,
                         grupo=segmento,
                         titulos="Bachiller",
                         estado="Postulado",
