@@ -200,8 +200,8 @@ def api_carrera_cupos(carrera_id):
                     "id_cupo": getattr(cup, "id_cupo", ""),
                     "estado": getattr(cup, "estado", ""),
                     "aspirante": {
-                        "cedula": getattr(asp, "cedula", "") if aspir else "",
-                        "nombre": getattr(asp, "nombre", "") if aspir else ""
+                        "cedula": getattr(aspir, "cedula", "") if aspir else "",
+                        "nombre": getattr(aspir, "nombre", "") if aspir else ""
                     } if aspir else None
                 })
             return jsonify({"carrera": getattr(c, "nombre", ""), "cupos": cupos})
