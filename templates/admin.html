@@ -9,6 +9,7 @@
       body { min-height: 100vh; }
       .sidebar { width: 240px; }
       .content { margin-left: 250px; padding: 20px; }
+      .pointer { cursor: pointer; }
     </style>
   </head>
   <body>
@@ -26,26 +27,38 @@
       <div class="bg-light sidebar position-fixed vh-100 p-3">
         <h6>Menu</h6>
         <ul class="nav flex-column">
+          <li class="nav-item"><a href="#" class="nav-link" id="menuUpload">Subir CSV</a></li>
           <li class="nav-item"><a href="#" class="nav-link" id="menuCupos">Gestionar Cupos</a></li>
           <li class="nav-item"><a href="#" class="nav-link" id="menuAspirantes">Ver Aspirantes</a></li>
         </ul>
       </div>
 
       <div class="content flex-fill">
-        <!-- Area dinámica -->
+        <!-- Upload panel -->
+        <div id="panelUpload">
+          <h4>Subir archivos CSV</h4>
+          <form id="uploadForm">
+            <div class="mb-3">
+              <label class="form-label">Archivo aspirantes (BaseDatos.csv)</label>
+              <input id="fileAspirantes" name="aspirantes" type="file" class="form-control" accept=".csv">
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Archivo carreras (Carreras.csv)</label>
+              <input id="fileCarreras" name="carreras" type="file" class="form-control" accept=".csv">
+            </div>
+            <button id="btnUpload" type="button" class="btn btn-primary">Subir y cargar</button>
+            <span class="mx-2"></span>
+            <button id="btnAssignAll" type="button" class="btn btn-success">Asignar cupos automáticamente</button>
+            <button id="btnReport" type="button" class="btn btn-outline-secondary">Generar reporte</button>
+          </form>
+          <hr>
+        </div>
+
+        <!-- Cupos panel -->
         <div id="panelCupos" style="display:none;">
           <h4>Gestionar Cupos</h4>
-          <div class="mb-3">
-            <label class="form-label">Crear cupos (cantidad)</label>
-            <input id="createCount" type="number" class="form-control" value="1" min="1">
-            <button id="btnCreateCupos" class="btn btn-primary mt-2">Crear</button>
-            <button id="btnRefreshCupos" class="btn btn-secondary mt-2">Refrescar</button>
-          </div>
-          <h6>Lista de cupos</h6>
-          <table class="table table-sm" id="tableCupos">
-            <thead><tr><th>ID</th><th>Estado</th><th>Aspirante</th><th>Acciones</th></tr></thead>
-            <tbody></tbody>
-          </table>
+          <div id="carrerasContainer" class="mb-3"></div>
+          <div id="cuposContainer"></div>
         </div>
 
         <div id="panelAspirantes" style="display:none;">
@@ -60,72 +73,182 @@
     </div>
 
     <script>
-      // funciones básicas para consumir API
       async function api(path, opts) {
         const res = await fetch(path, opts);
-        if (!res.ok) throw new Error(await res.text());
+        if (!res.ok) {
+          const txt = await res.text();
+          throw new Error(txt || res.statusText);
+        }
         return res.json();
       }
-      async function logout() {
+
+      // Logout
+      document.getElementById('logoutBtn')?.addEventListener('click', async () => {
         await api('/logout', {method: 'POST'});
         window.location = '/';
-      }
-      document.getElementById('logoutBtn').addEventListener('click', logout);
+      });
 
+      // Menu handlers
+      document.getElementById('menuUpload').addEventListener('click', () => {
+        document.getElementById('panelUpload').style.display = 'block';
+        document.getElementById('panelCupos').style.display = 'none';
+        document.getElementById('panelAspirantes').style.display = 'none';
+      });
       document.getElementById('menuCupos').addEventListener('click', () => {
-        document.getElementById('panelCupos').style.display='block';
-        document.getElementById('panelAspirantes').style.display='none';
-        loadCupos();
+        document.getElementById('panelUpload').style.display = 'none';
+        document.getElementById('panelCupos').style.display = 'block';
+        document.getElementById('panelAspirantes').style.display = 'none';
+        loadCarreras();
       });
       document.getElementById('menuAspirantes').addEventListener('click', () => {
-        document.getElementById('panelCupos').style.display='none';
-        document.getElementById('panelAspirantes').style.display='block';
+        document.getElementById('panelUpload').style.display = 'none';
+        document.getElementById('panelCupos').style.display = 'none';
+        document.getElementById('panelAspirantes').style.display = 'block';
         loadAspirantes();
       });
 
-      document.getElementById('btnCreateCupos').addEventListener('click', async () => {
-        const count = parseInt(document.getElementById('createCount').value) || 1;
-        await api('/api/cupos', {method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({cantidad: count})});
-        loadCupos();
+      // Upload files
+      document.getElementById('btnUpload').addEventListener('click', async () => {
+        const form = new FormData();
+        const fAsp = document.getElementById('fileAspirantes').files[0];
+        const fCarr = document.getElementById('fileCarreras').files[0];
+        if (fAsp) form.append('aspirantes', fAsp);
+        if (fCarr) form.append('carreras', fCarr);
+        try {
+          await api('/admin/upload', {method: 'POST', body: form});
+          alert('Archivos cargados correctamente.');
+        } catch (e) {
+          alert('Error: ' + e.message);
+        }
       });
-      document.getElementById('btnRefreshCupos').addEventListener('click', loadCupos);
 
-      async function loadCupos(){
-        try{
-          const cups = await api('/api/cupos');
-          const tbody = document.querySelector('#tableCupos tbody');
-          tbody.innerHTML = '';
-          cups.forEach(c => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `<td>${c.id_cupo}</td><td>${c.estado}</td><td>${c.aspirante || '-'}</td>
+      // Assign all
+      document.getElementById('btnAssignAll').addEventListener('click', async () => {
+        if (!confirm('¿Deseas ejecutar la asignación automática para todas las carreras?')) return;
+        try {
+          const res = await api('/admin/assign', {method: 'POST'});
+          alert('Asignación completada. Revisa las carreras.');
+          loadCarreras();
+        } catch (e) {
+          alert('Error: ' + e.message);
+        }
+      });
+
+      // Generate report
+      document.getElementById('btnReport').addEventListener('click', async () => {
+        try {
+          await api('/admin/report', {method: 'POST'});
+          alert('Reporte generado (se imprimirá en la consola del servidor).');
+        } catch (e) {
+          alert('Error: ' + e.message);
+        }
+      });
+
+      // Load carreras and show buttons
+      async function loadCarreras(){
+        try {
+          const carreras = await api('/api/carreras');
+          const container = document.getElementById('carrerasContainer');
+          container.innerHTML = '';
+          if (!carreras.length) {
+            container.innerHTML = '<div class="alert alert-warning">No hay carreras cargadas.</div>';
+            return;
+          }
+          carreras.forEach(c => {
+            const el = document.createElement('div');
+            el.className = 'd-flex align-items-center mb-2';
+            el.innerHTML = `
+              <div class="flex-fill">
+                <strong>${c.nombre}</strong> — Cupos: ${c.oferta_cupos} — Asignados: ${c.cupos_asignados}
+              </div>
+              <div>
+                <button class="btn btn-sm btn-outline-primary me-2" data-id="${c.id}" onclick="verCupos('${c.id}')">Ver cupos</button>
+                <button class="btn btn-sm btn-outline-danger" data-id="${c.id}" onclick="eliminarCuposCarrera('${c.id}')">Eliminar todos cupos</button>
+              </div>
+            `;
+            container.appendChild(el);
+          });
+        } catch (e) {
+          console.error(e);
+          alert('Error cargando carreras: ' + e.message);
+        }
+      }
+
+      // Ver cupos de carrera
+      async function verCupos(id) {
+        try {
+          const res = await api('/api/carreras/' + encodeURIComponent(id) + '/cupos');
+          const cont = document.getElementById('cuposContainer');
+          let html = `<h5>Cupos - ${res.carrera}</h5>`;
+          html += `<table class="table table-sm"><thead><tr><th>ID</th><th>Estado</th><th>Aspirante</th><th>Acciones</th></tr></thead><tbody>`;
+          res.cupos.forEach(c => {
+            const aspir = c.aspirante ? `${c.aspirante.cedula} — ${c.aspirante.nombre}` : '-';
+            html += `<tr>
+              <td>${c.id_cupo}</td>
+              <td>${c.estado}</td>
+              <td>${aspir}</td>
               <td>
-                <button class="btn btn-sm btn-danger" onclick="deleteCupo('${c.id_cupo}')">Eliminar</button>
-              </td>`;
-            tbody.appendChild(tr);
+                <button class="btn btn-sm btn-outline-warning" onclick="liberarCupo('${c.id_cupo}')">Liberar</button>
+                <button class="btn btn-sm btn-outline-danger" onclick="eliminarCupo('${c.id_cupo}')">Eliminar</button>
+              </td>
+            </tr>`;
           });
-        }catch(e){ alert('Error: '+e.message); }
-      }
-      async function deleteCupo(id){
-        if(!confirm('Eliminar cupo '+id+'?')) return;
-        await api('/api/cupos/'+id, {method:'DELETE'});
-        loadCupos();
+          html += `</tbody></table>`;
+          cont.innerHTML = html;
+        } catch (e) {
+          alert('Error: ' + e.message);
+        }
       }
 
+      // Liberar cupo
+      async function liberarCupo(id) {
+        try {
+          await api('/api/cupos/' + encodeURIComponent(id) + '/liberar', {method:'POST'});
+          alert('Cupo liberado');
+          loadCarreras();
+        } catch (e) {
+          alert('Error: ' + e.message);
+        }
+      }
+
+      // Eliminar cupo
+      async function eliminarCupo(id) {
+        if (!confirm('¿Eliminar este cupo permanentemente?')) return;
+        try {
+          await api('/api/cupos/' + encodeURIComponent(id), {method:'DELETE'});
+          alert('Cupo eliminado');
+          loadCarreras();
+        } catch (e) {
+          alert('Error: ' + e.message);
+        }
+      }
+
+      // Eliminar todos los cupos de una carrera (acción peligrosa)
+      async function eliminarCuposCarrera(carreraId) {
+        if (!confirm('¿Eliminar todos los cupos de esta carrera?')) return;
+        // Se eliminarán individualmente (no hay endpoint para bulk), así que pedimos la lista y borramos cada uno.
+        try {
+          const res = await api('/api/carreras/' + encodeURIComponent(carreraId) + '/cupos');
+          for (const c of res.cupos) {
+            await api('/api/cupos/' + encodeURIComponent(c.id_cupo), {method: 'DELETE'});
+          }
+          alert('Todos los cupos eliminados para la carrera.');
+          loadCarreras();
+        } catch (e) {
+          alert('Error: ' + e.message);
+        }
+      }
+
+      // Load aspirantes into table
       async function loadAspirantes(){
-        try{
-          const aspirantes = await api('/api/applicants');
-          const tbody = document.querySelector('#tableAspirantes tbody');
-          tbody.innerHTML = '';
-          aspirantes.forEach(a => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `<td>${a.cedula}</td><td>${a.nombre}</td><td>${a.puntaje}</td><td>${a.estado}</td>`;
-            tbody.appendChild(tr);
-          });
-        }catch(e){ alert('Error: '+e.message); }
+        // Si quieres, puedes añadir un endpoint que devuelva aspirantes; por ahora intentamos usar /admin/assign response or we show local upload file
+        // Para simplicidad: avisamos al admin que use la subida para visualizar aspirantes
+        const tbody = document.querySelector('#tableAspirantes tbody');
+        tbody.innerHTML = '<tr><td colspan="4">Carga los aspirantes para ver la lista.</td></tr>';
       }
 
-      // iniciar mostrando aspirantes
-      document.getElementById('menuAspirantes').click();
+      // Inicializar vista: mostrar upload
+      document.getElementById('menuUpload').click();
     </script>
   </body>
 </html>
