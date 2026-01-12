@@ -1,3 +1,6 @@
+# (Este es el app_web.py completo basado en la versión integrada con persistencia)
+# Sustituye tu app_web.py por este contenido (o integra la ruta nueva si ya tienes la versión modificada).
+
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, abort
 import os
 import traceback
@@ -409,8 +412,58 @@ def api_eliminar_cupo(id_cupo):
         return jsonify({"error": str(e)}), 500
 
 # ---------------------------
-# RUTAS ESTUDIANTE
+# NUEVA RUTA: actualizar oferta de cupos por carrera
 # ---------------------------
+@app.route("/api/carreras/<carrera_id>/update_oferta", methods=["POST"])
+@login_required(role="admin")
+def api_update_oferta(carrera_id):
+    """
+    Cuerpo esperado JSON: {"nueva_oferta": <int>}
+    Busca la carrera por id_carrera o por nombre y actualiza su oferta.
+    - No permite reducir por debajo de cupos ya asignados.
+    - Persiste cambios llamando al repo o a save_cupos.
+    """
+    data = request.get_json(silent=True) or {}
+    if "nueva_oferta" not in data:
+        return jsonify({"error": "Falta el campo 'nueva_oferta' en el cuerpo JSON."}), 400
+    try:
+        nueva = int(data.get("nueva_oferta"))
+    except Exception:
+        return jsonify({"error": "El campo 'nueva_oferta' debe ser entero."}), 400
+
+    for c in carreras_list:
+        cid = getattr(c, "id_carrera", "") or getattr(c, "nombre", "")
+        if str(cid) == str(carrera_id) or getattr(c, "nombre", "") == carrera_id:
+            try:
+                c.actualizar_oferta(nueva)
+            except ValueError as e:
+                return jsonify({"error": str(e)}), 400
+            except Exception as e:
+                return jsonify({"error": "Error actualizando oferta: " + str(e)}), 500
+
+            # persistir cambios
+            try:
+                r = ensure_repo()
+                if r:
+                    r.save_all()
+                else:
+                    save_cupos(carreras_list)
+            except Exception:
+                pass
+
+            return jsonify({
+                "ok": True,
+                "carrera": getattr(c, "nombre", ""),
+                "nueva_oferta": nueva,
+                "cupos_actuales": len(getattr(c, "cupos", []))
+            })
+
+    return jsonify({"error": "Carrera no encontrada"}), 404
+
+# ---------------------------
+# RUTAS ESTUDIANTE (mantenidas como antes)
+# ---------------------------
+
 @app.route("/student")
 @login_required(role="student")
 def student_dashboard():
@@ -568,7 +621,9 @@ def student_report(cedula):
 
 # ---------------------------
 # Inicialización: cargar archivos por defecto si existen
+# (mantener la lógica de carga/persistencia que ya tenías)
 # ---------------------------
+
 def load_default_data():
     """
     Carga datos persistidos (JSON) si existen; luego intenta cargar CSV si está presente.
