@@ -10,6 +10,7 @@
       .sidebar { width: 240px; }
       .content { margin-left: 250px; padding: 20px; }
       .pointer { cursor: pointer; }
+      .campus-badge { font-size: 0.85rem; margin-left: 8px; }
     </style>
   </head>
   <body>
@@ -86,6 +87,10 @@
                 <input id="editCarreraNombre" type="text" class="form-control" readonly>
               </div>
               <div class="mb-3">
+                <label class="form-label">Campus</label>
+                <input id="editCarreraCampus" type="text" class="form-control" readonly>
+              </div>
+              <div class="mb-3">
                 <label class="form-label">Cupos actuales</label>
                 <input id="editCuposActuales" type="number" class="form-control" readonly>
               </div>
@@ -98,6 +103,24 @@
           </div>
           <div class="modal-footer">
             <button id="btnGuardarCupos" type="button" class="btn btn-primary">Guardar</button>
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal ver detalles de carrera / cupos -->
+    <div class="modal fade" id="modalVerCupos" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="modalVerCuposTitle">Cupos</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+          </div>
+          <div class="modal-body">
+            <div id="modalCuposBody"></div>
+          </div>
+          <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
           </div>
         </div>
@@ -191,13 +214,15 @@
           carreras.forEach(c => {
             const div = document.createElement('div');
             div.className = 'mb-3 d-flex justify-content-between align-items-center';
+            const campusText = c.campus ? `<span class="badge bg-info text-dark campus-badge">${c.campus}</span>` : '';
             div.innerHTML = `
               <div>
-                <strong>${c.nombre}</strong> — Cupos: <span id="cupos-${c.id}">${c.oferta_cupos}</span> — Asignados: ${c.cupos_asignados}
+                <strong>${c.nombre}</strong> ${campusText}<br>
+                <small>Cupos: <span id="cupos-${c.id}">${c.oferta_cupos}</span> — Asignados: ${c.cupos_asignados}</small>
               </div>
               <div>
-                <button class="btn btn-sm btn-outline-primary me-2 btn-ver-cupos" data-id="${c.id}">Ver cupos</button>
-                <button class="btn btn-sm btn-outline-secondary me-2 btn-editar-cupos" data-id="${c.id}" data-nombre="${c.nombre}" data-oferta="${c.oferta_cupos}">Editar cupos</button>
+                <button class="btn btn-sm btn-outline-primary me-2 btn-ver-cupos" data-id="${c.id}" data-nombre="${c.nombre}" data-campus="${c.campus || ''}">Ver cupos</button>
+                <button class="btn btn-sm btn-outline-secondary me-2 btn-editar-cupos" data-id="${c.id}" data-nombre="${c.nombre}" data-oferta="${c.oferta_cupos}" data-campus="${c.campus || ''}">Editar cupos</button>
                 <button class="btn btn-sm btn-outline-danger btn-eliminar-cupos" data-id="${c.id}">Eliminar todos cupos</button>
               </div>
             `;
@@ -210,29 +235,72 @@
               const id = btn.getAttribute('data-id');
               const nombre = btn.getAttribute('data-nombre');
               const oferta = btn.getAttribute('data-oferta');
-              abrirModalEditar(id, nombre, oferta);
+              const campus = btn.getAttribute('data-campus') || '';
+              abrirModalEditar(id, nombre, oferta, campus);
             });
           });
 
           document.querySelectorAll('.btn-ver-cupos').forEach(btn => {
             btn.addEventListener('click', async () => {
               const id = btn.getAttribute('data-id');
+              const nombre = btn.getAttribute('data-nombre');
+              const campus = btn.getAttribute('data-campus') || '';
               try {
-                const data = await api(`/api/carreras/${id}/cupos`, { method: 'GET' });
-                // mostrar en cuposContainer
-                const cont = document.getElementById('cuposContainer');
-                cont.innerHTML = `<h5>Cupos para ${data.carrera}</h5>`;
-                const table = document.createElement('table');
-                table.className = 'table table-sm';
-                table.innerHTML = '<thead><tr><th>ID</th><th>Estado</th><th>Aspirante</th></tr></thead>';
-                const tb = document.createElement('tbody');
-                data.cupos.forEach(cc => {
-                  const tr = document.createElement('tr');
-                  tr.innerHTML = `<td>${cc.id_cupo}</td><td>${cc.estado}</td><td>${cc.aspirante ? cc.aspirante.nombre : ''}</td>`;
-                  tb.appendChild(tr);
-                });
-                table.appendChild(tb);
-                cont.appendChild(table);
+                const data = await api(`/api/carreras/${encodeURIComponent(id)}/cupos`, { method: 'GET' });
+                // mostrar en modal
+                const cont = document.getElementById('modalCuposBody');
+                document.getElementById('modalVerCuposTitle').textContent = `Cupos para ${nombre} ${campus ? '(' + campus + ')' : ''}`;
+                cont.innerHTML = '';
+                if (!data || !data.cupos || data.cupos.length === 0) {
+                  cont.innerHTML = '<p>No hay cupos para esta carrera.</p>';
+                } else {
+                  const table = document.createElement('table');
+                  table.className = 'table table-sm';
+                  table.innerHTML = '<thead><tr><th>ID</th><th>Estado</th><th>Aspirante</th><th>Acciones</th></tr></thead>';
+                  const tb = document.createElement('tbody');
+                  data.cupos.forEach(cc => {
+                    const tr = document.createElement('tr');
+                    const aspirName = cc.aspirante ? (cc.aspirante.nombre || cc.aspirante.nombre || '') : '';
+                    tr.innerHTML = `<td>${cc.id_cupo}</td><td>${cc.estado}</td><td>${aspirName}</td>
+                      <td>
+                        <button class="btn btn-sm btn-outline-danger btn-delete-cupo" data-id="${cc.id_cupo}">Eliminar</button>
+                        <button class="btn btn-sm btn-outline-warning btn-liberar-cupo" data-id="${cc.id_cupo}">Liberar</button>
+                      </td>`;
+                    tb.appendChild(tr);
+                  });
+                  table.appendChild(tb);
+                  cont.appendChild(table);
+
+                  // attach delete/liberar handlers
+                  document.querySelectorAll('.btn-delete-cupo').forEach(b => {
+                    b.addEventListener('click', async () => {
+                      if (!confirm('¿Eliminar este cupo?')) return;
+                      try {
+                        await api(`/api/cupos/${encodeURIComponent(b.getAttribute('data-id'))}`, { method: 'DELETE' });
+                        await cargarColegios();
+                        // refresh modal content
+                        btn.click();
+                      } catch (e) {
+                        alert('Error: ' + e.message);
+                      }
+                    });
+                  });
+                  document.querySelectorAll('.btn-liberar-cupo').forEach(b => {
+                    b.addEventListener('click', async () => {
+                      if (!confirm('¿Liberar este cupo?')) return;
+                      try {
+                        await api(`/api/cupos/${encodeURIComponent(b.getAttribute('data-id'))}/liberar`, { method: 'POST' });
+                        await cargarColegios();
+                        btn.click();
+                      } catch (e) {
+                        alert('Error: ' + e.message);
+                      }
+                    });
+                  });
+                }
+
+                const modalView = new bootstrap.Modal(document.getElementById('modalVerCupos'));
+                modalView.show();
               } catch (e) {
                 alert('Error al obtener cupos: ' + e.message);
               }
@@ -244,11 +312,11 @@
               if (!confirm('¿Eliminar todos los cupos de esta carrera? Esta acción puede afectar asignaciones.')) return;
               const id = btn.getAttribute('data-id');
               try {
-                // Obtén la lista de cupos y borra uno por uno (o crea endpoint específico)
-                const data = await api(`/api/carreras/${id}/cupos`, { method: 'GET' });
+                // obtener lista de cupos y borrarlos uno por uno
+                const data = await api(`/api/carreras/${encodeURIComponent(id)}/cupos`, { method: 'GET' });
                 if (data && data.cupos) {
                   for (const cup of data.cupos) {
-                    await api(`/api/cupos/${cup.id_cupo}`, { method: 'DELETE' });
+                    await api(`/api/cupos/${encodeURIComponent(cup.id_cupo)}`, { method: 'DELETE' });
                   }
                 }
                 alert('Cupos eliminados.');
@@ -268,9 +336,10 @@
       // Modal helpers
       let carreraEditarId = null;
       const modalEditar = new bootstrap.Modal(document.getElementById('modalEditarCupos'));
-      function abrirModalEditar(id, nombre, oferta) {
+      function abrirModalEditar(id, nombre, oferta, campus) {
         carreraEditarId = id;
         document.getElementById('editCarreraNombre').value = nombre;
+        document.getElementById('editCarreraCampus').value = campus || '—';
         document.getElementById('editCuposActuales').value = oferta;
         document.getElementById('editNuevaOferta').value = oferta;
         document.getElementById('editError').classList.add('d-none');

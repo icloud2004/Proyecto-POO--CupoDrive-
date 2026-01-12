@@ -1,15 +1,9 @@
 """
-Cargar_carreras.py
 Módulo para cargar la oferta de carreras desde 'Carreras.csv' (por defecto).
 - Maneja CSV con separador ';' y BOM (utf-8-sig).
 - Intenta devolver instancias de la clase Carrera si está disponible en el repo,
   en caso contrario devuelve diccionarios con los campos parseados.
 - Tolerante a variaciones en nombres de columna comunes.
-
-Uso:
-    from Cargar_carreras import CargarCarreras
-    loader = CargarCarreras("Carreras.csv")
-    carreras = loader.cargar(as_model=True)  # lista de Carrera o de dicts
 """
 
 from typing import List, Dict, Any
@@ -50,7 +44,9 @@ class CargarCarreras:
         for c in candidates:
             key = c.strip().lower()
             if key in mapping:
-                return row.get(mapping[key], None)
+                val = row.get(mapping[key], None)
+                if val is not None:
+                    return val
         return None
 
     def _to_int(self, value: Any) -> int:
@@ -71,7 +67,7 @@ class CargarCarreras:
         """
         Carga el CSV y devuelve una lista de:
          - instancias Carrera (si as_model True y la clase Carrera está disponible)
-         - o diccionarios con keys: id_carrera, nombre, oferta_cupos, fila_raw
+         - o diccionarios con keys: id_carrera, nombre, oferta_cupos, campus, fila_raw
         """
         if not os.path.exists(self.path):
             raise FileNotFoundError(f"No existe el archivo: {self.path}")
@@ -84,64 +80,68 @@ class CargarCarreras:
 
             # Candidatos para los campos que nos interesan (variaciones comunes)
             nombre_cands = [
-                "car_nombre_carrera", "car_nombre", "ofa_titulo", "pro_nombre", "car_nombre_carrera"
+                "car_nombre_carrera", "car_nombre", "ofa_titulo", "pro_nombre", "car_nombre"
             ]
             oferta_cands = [
-                "cus_total_cupos", "cus_total", "cus_cupos_total", "cus_cupos_primer_semestre", "cus_total_cupos"
+                "cus_total_cupos", "cus_total", "oferta_cupos", "cus_total_cupos", "oferta"
             ]
             id_cands = [
-                "cus_id", "ofa_id", "car_id", "oferta_id", "ies_id"
+                "cus_id", "ofa_id", "id", "id_carrera"
+            ]
+            campus_cands = [
+                "can_nombre", "campus", "sede", "prq_nombre"
             ]
 
-            for i, row in enumerate(reader):
-                # Extraer valores con tolerancia a cabeceras
-                nombre_raw = self._find_value(row, field_map, nombre_cands) or ""
+            for row in reader:
+                # extraer campos tolerantes
+                nombre = self._find_value(row, field_map, nombre_cands) or row.get(next(iter(row.keys())), "").strip()
                 oferta_raw = self._find_value(row, field_map, oferta_cands)
                 id_raw = self._find_value(row, field_map, id_cands)
+                campus = self._find_value(row, field_map, campus_cands) or ""
 
-                nombre = str(nombre_raw).strip()
                 oferta = self._to_int(oferta_raw)
-                id_carrera = str(id_raw).strip() if id_raw and str(id_raw).strip() != "" else f"auto-{i+1}"
+                id_carrera = (id_raw or "").strip()
 
-                registro = {
-                    "id_carrera": id_carrera,
-                    "nombre": nombre or f"Carrera-{i+1}",
-                    "oferta_cupos": oferta,
-                    "fila_raw": row
-                }
+                # Normalizar nombre y campus
+                nombre = (nombre or "").strip()
+                campus = (campus or "").strip()
 
                 if as_model and _HAS_CARRERA_CLASS:
+                    # intentar crear la instancia Carrera con campus si el constructor lo acepta
                     try:
-                        # Crear instancia de Carrera con los campos mínimos
-                        carrera_obj = Carrera(
-                            id_carrera=str(registro["id_carrera"]),
-                            nombre=registro["nombre"],
-                            oferta_cupos=int(registro["oferta_cupos"] or 0)
-                        )
-                        resultados.append(carrera_obj)
-                    except Exception as e:
-                        # Si falla creación, devolver como dict con la razón
-                        registro["error_creacion"] = str(e)
-                        resultados.append(registro)
-                else:
-                    resultados.append(registro)
+                        try:
+                            carrera_obj = Carrera(id_carrera, nombre, oferta, campus=campus)
+                        except TypeError:
+                            # fallback: intentar con firma posicional
+                            carrera_obj = Carrera(id_carrera, nombre, oferta, None, campus)
+                    except Exception:
+                        # Si falla crear el objeto, caer al dict fallback
+                        carrera_obj = None
 
-        if as_model and not _HAS_CARRERA_CLASS:
-            print("[CargarCarreras] Aviso: la clase Carrera no está disponible; se retornan diccionarios.")
+                    if carrera_obj is None:
+                        resultados.append({
+                            "id_carrera": id_carrera,
+                            "nombre": nombre,
+                            "oferta_cupos": oferta,
+                            "campus": campus,
+                            "fila_raw": row
+                        })
+                    else:
+                        # si la clase Carrera existe pero no tiene campus asignado, intentar setearlo
+                        try:
+                            if not getattr(carrera_obj, "campus", None):
+                                setattr(carrera_obj, "campus", campus)
+                        except Exception:
+                            pass
+                        resultados.append(carrera_obj)
+                else:
+                    # devolver dict
+                    resultados.append({
+                        "id_carrera": id_carrera,
+                        "nombre": nombre,
+                        "oferta_cupos": oferta,
+                        "campus": campus,
+                        "fila_raw": row
+                    })
 
         return resultados
-
-
-# Ejemplo de uso directo
-if __name__ == "__main__":
-    loader = CargarCarreras("Carreras.csv")
-    try:
-        carreras = loader.cargar(as_model=True)
-        for c in carreras:
-            if _HAS_CARRERA_CLASS and isinstance(c, Carrera):
-                print(f"{c.id_carrera} - {c.nombre} ({c.oferta_cupos} cupos)")
-            else:
-                # dict con información
-                print(f"{c.get('id_carrera')} - {c.get('nombre')} ({c.get('oferta_cupos')} cupos)")
-    except FileNotFoundError as e:
-        print(e)

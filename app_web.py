@@ -315,6 +315,7 @@ def api_carreras():
         out.append({
             "id": cid,
             "nombre": getattr(c, "nombre", ""),
+            "campus": getattr(c, "campus", "") or "",
             "oferta_cupos": getattr(c, "oferta_cupos", len(getattr(c, "cupos", []))),
             "cupos_asignados": len([x for x in getattr(c, "cupos", []) if getattr(x, "estado", "") != "Disponible"])
         })

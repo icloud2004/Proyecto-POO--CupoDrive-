@@ -1,6 +1,6 @@
 import csv
 from Aspirante import Aspirante
-#PATRON DE DISEÑO SINGLETON
+#PATRON SINGLETON
 class Cargar_datos:
     # Esta variable guardará la única instancia de la clase
     _instancia_unica = None
@@ -45,6 +45,25 @@ class Cargar_datos:
                         vulnerabilidad="Alta" if int(segmento) == 1 else "Media",
                         fecha_inscripcion="2025-01-10"
                     )
+
+                    # Guardamos campus en el objeto aspirante para filtrar por sede más tarde
+                    try:
+                        setattr(aspirante, "campus", campus)
+                    except Exception:
+                        pass
+
+                    # Guardar prioridad si existe (útil)
+                    try:
+                        setattr(aspirante, "prioridad", int(prioridad))
+                    except Exception:
+                        pass
+
+                    # Guardar puntaje_postulacion también como atributo si lo necesitas explícitamente
+                    try:
+                        setattr(aspirante, "puntaje_postulacion", float(puntaje_postulacion))
+                    except Exception:
+                        pass
+
                     self.aspirantes.append(aspirante)
 
             self.ya_cargo = True # Marcamos que ya terminó
@@ -56,7 +75,5 @@ class Cargar_datos:
             return []
 
 # --- Cómo se usa ahora ---
-# En lugar de hacer: objeto = Cargar_datos()
-# Usamos el método que creamos:
 instancia = Cargar_datos.obtener_instancia()
 lista_aspirantes = instancia.cargar()
