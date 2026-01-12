@@ -287,24 +287,44 @@ def api_carreras():
         })
     return jsonify(out)
 
-@app.route("/api/carreras/<carrera_id>/cupos", methods=["GET"])
+@app.route("/api/carreras/<carrera_id>/cupos", methods=["DELETE"])
 @login_required(role="admin")
-def api_carrera_cupos(carrera_id):
+def api_eliminar_todos_cupos(carrera_id):
+    """
+    Elimina todos los cupos asociados a la carrera identificada por carrera_id (id_carrera o nombre).
+    Actualiza repo/persistencia.
+    """
     for c in carreras_list:
         cid = getattr(c, "id_carrera", "") or getattr(c, "nombre", "")
         if str(cid) == str(carrera_id) or getattr(c, "nombre", "") == carrera_id:
-            cupos = []
-            for cup in getattr(c, "cupos", []):
-                aspir = getattr(cup, "aspirante", None)
-                cupos.append({
-                    "id_cupo": getattr(cup, "id_cupo", ""),
-                    "estado": getattr(cup, "estado", ""),
-                    "aspirante": {
-                        "cedula": getattr(aspir, "cedula", "") if aspir else "",
-                        "nombre": getattr(aspir, "nombre", "") if aspir else ""
-                    } if aspir else None
-                })
-            return jsonify({"carrera": getattr(c, "nombre", ""), "cupos": cupos})
+            try:
+                # contar y eliminar todos los cupos
+                removed_count = len(getattr(c, "cupos", []))
+                c.cupos = []
+
+                # (opcional) si quieres mantener oferta_cupos, comenta la siguiente línea
+                try:
+                    c.oferta_cupos = 0
+                except Exception:
+                    pass
+
+                # persistir cambios en repo / archivo
+                try:
+                    r = ensure_repo()
+                    if r:
+                        if hasattr(r, "save_all"):
+                            r.save_all()
+                        else:
+                            save_cupos(carreras_list)
+                    else:
+                        save_cupos(carreras_list)
+                except Exception:
+                    pass
+
+                return jsonify({"ok": True, "removed": removed_count})
+            except Exception as e:
+                return jsonify({"error": "Error eliminando cupos: " + str(e)}), 500
+
     return jsonify({"error": "Carrera no encontrada"}), 404
 
 @app.route("/api/aspirantes", methods=["GET"])

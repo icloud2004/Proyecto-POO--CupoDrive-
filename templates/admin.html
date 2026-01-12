@@ -307,25 +307,36 @@
             });
           });
 
+          // --------- NUEVO HANDLER: Eliminar todos los cupos (usa endpoint DELETE dedicado) ----------
           document.querySelectorAll('.btn-eliminar-cupos').forEach(btn => {
             btn.addEventListener('click', async () => {
               if (!confirm('¿Eliminar todos los cupos de esta carrera? Esta acción puede afectar asignaciones.')) return;
               const id = btn.getAttribute('data-id');
+              if (!id) return alert('Identificador de carrera no disponible.');
+
               try {
-                // obtener lista de cupos y borrarlos uno por uno
-                const data = await api(`/api/carreras/${encodeURIComponent(id)}/cupos`, { method: 'GET' });
-                if (data && data.cupos) {
-                  for (const cup of data.cupos) {
-                    await api(`/api/cupos/${encodeURIComponent(cup.id_cupo)}`, { method: 'DELETE' });
-                  }
-                }
+                // Llamada directa al endpoint DELETE dedicado (mejor que borrar cupo por cupo)
+                await api(`/api/carreras/${encodeURIComponent(id)}/cupos`, { method: 'DELETE' });
                 alert('Cupos eliminados.');
                 await cargarColegios();
               } catch (e) {
-                alert('Error al eliminar cupos: ' + e.message);
+                // Fallback: intentar borrar cupo por cupo si el endpoint DELETE no existe
+                try {
+                  const data = await api(`/api/carreras/${encodeURIComponent(id)}/cupos`, { method: 'GET' });
+                  if (data && data.cupos) {
+                    for (const cup of data.cupos) {
+                      await api(`/api/cupos/${encodeURIComponent(cup.id_cupo)}`, { method: 'DELETE' });
+                    }
+                  }
+                  alert('Cupos eliminados (fallback).');
+                  await cargarColegios();
+                } catch (err) {
+                  alert('Error al eliminar cupos: ' + (err.message || err));
+                }
               }
             });
           });
+          // -----------------------------------------------------------------------------------------
 
         } catch (e) {
           console.error(e);
