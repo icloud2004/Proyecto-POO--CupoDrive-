@@ -41,10 +41,10 @@ except Exception:
 
 # Importar estrategias (la asignación seguirá usando Strategy; MultiSegmentStrategy usará los segmentos globales)
 try:
-    from Asignación_cupos import Asignacion_cupo, MultiSegmentStrategy, SegmentQuotaStrategy, MeritStrategy, LotteryStrategy
+    from Asignacion_cupos import Asignacion_cupo, MultiSegmentStrategy, SegmentQuotaStrategy, MeritStrategy, LotteryStrategy
 except Exception:
     try:
-        from Asignación_cupos import Asignacion_cupo, MultiSegmentStrategy, SegmentQuotaStrategy, MeritStrategy, LotteryStrategy
+        from Asignacion_cupos import Asignacion_cupo, MultiSegmentStrategy, SegmentQuotaStrategy, MeritStrategy, LotteryStrategy
     except Exception:
         Asignacion_cupo = None
         MultiSegmentStrategy = None
