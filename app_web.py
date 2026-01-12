@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, abort
 import os
+import traceback
 
 # Intentar importar cargadores con varios nombres posibles (repos pueden variar)
 try:
@@ -35,6 +36,23 @@ except Exception:
         SegmentQuotaStrategy = None
         MeritStrategy = None
 
+# Importar persistencia JSON (guardar/leer)
+try:
+    from persistencia import save_aspirantes, load_aspirantes, save_cupos, load_cupos
+except Exception:
+    # Si persistencia no está presente, definimos stubs para evitar excepciones
+    def save_aspirantes(*args, **kwargs):
+        print("persistencia.save_aspirantes no disponible")
+
+    def load_aspirantes(*args, **kwargs):
+        return []
+
+    def save_cupos(*args, **kwargs):
+        print("persistencia.save_cupos no disponible")
+
+    def load_cupos(*args, **kwargs):
+        return []
+
 app = Flask(__name__)
 # Forzar búsqueda del folder templates relativo al archivo (evita problemas con CWD)
 app.template_folder = os.path.join(os.path.dirname(__file__), "templates")
@@ -49,7 +67,32 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 carreras_list = []       # lista de instancias Carrera
 aspirantes_list = []     # lista de instancias Aspirante o dicts
 uni_global = None
-repo = RepositorioCupos()
+
+# El repo lo instanciamos cuando tengamos referencias a carreras (o bajo demanda)
+repo = None
+
+def ensure_repo():
+    """
+    Asegura que 'repo' está instanciado. Si no, lo crea con referencia a carreras_list.
+    Devuelve el repo.
+    """
+    global repo
+    try:
+        if repo is None:
+            repo = RepositorioCupos(carreras_list_ref=carreras_list)
+        else:
+            # si existe pero no tiene referencia a carreras, asignarla para permitir mapear estados
+            if getattr(repo, "carreras_ref", None) is None and carreras_list:
+                repo.carreras_ref = carreras_list
+                # intentar aplicar persisted a carreras si hay registros
+                try:
+                    if hasattr(repo, "_apply_persisted_to_carreras"):
+                        repo._apply_persisted_to_carreras()
+                except Exception:
+                    traceback.print_exc()
+    except Exception:
+        traceback.print_exc()
+    return repo
 
 # Usuarios (ejemplo)
 USERS = {
@@ -146,7 +189,7 @@ def admin_dashboard():
 @app.route("/admin/upload", methods=["POST"])
 @login_required(role="admin")
 def admin_upload():
-    global aspirantes_list, carreras_list, uni_global
+    global aspirantes_list, carreras_list, uni_global, repo
 
     aspir_file = request.files.get("aspirantes")
     carr_file = request.files.get("carreras")
@@ -165,6 +208,7 @@ def admin_upload():
         except Exception as e:
             return jsonify({"error": f"Error cargando aspirantes: {e}"}), 500
 
+        # registrar usuarios tipo student (login simple por cédula)
         for a in aspirantes_list:
             try:
                 usr = getattr(a, "cedula", None) if not isinstance(a, dict) else (a.get("identificiacion") or a.get("identificacion") or a.get("cedula"))
@@ -172,6 +216,12 @@ def admin_upload():
                 usr = None
             if usr and str(usr) not in USERS:
                 USERS[str(usr)] = {"role": "student", "username": str(usr), "password": str(usr), "name": getattr(a, "nombre", "") if not isinstance(a, dict) else (a.get("nombres") or a.get("nombre") or "")}
+
+        # Persistir aspirantes a JSON
+        try:
+            save_aspirantes(aspirantes_list)
+        except Exception as e:
+            print("Advertencia: no se pudo guardar aspirantes en JSON:", e)
 
     # Guardar y cargar carreras
     if carr_file:
@@ -193,6 +243,20 @@ def admin_upload():
         except Exception as e:
             return jsonify({"error": f"Error cargando carreras: {e}"}), 500
 
+        # Instanciar repo con referencia a carreras y persistir cupos
+        try:
+            repo = RepositorioCupos(carreras_list_ref=carreras_list)
+            try:
+                repo.save_all()
+            except Exception:
+                # fallback a save_cupos
+                try:
+                    save_cupos(carreras_list)
+                except Exception:
+                    pass
+        except Exception as e:
+            print("Advertencia: error instanciando repo tras upload:", e)
+
     return jsonify({"ok": True})
 
 @app.route("/admin/assign", methods=["POST"])
@@ -213,6 +277,16 @@ def admin_assign_all():
             "asignados_count": len(asignados),
             "asignados": [ {"cedula": getattr(a, "cedula", "") if not isinstance(a, dict) else a.get("cedula",""), "nombre": getattr(a, "nombre", "") if not isinstance(a, dict) else (a.get("nombres") or a.get("nombre","")), "puntaje": getattr(a, "puntaje", "") if not isinstance(a, dict) else a.get("puntaje","")} for a in asignados ]
         }
+
+    # Persistir cambios en cupos tras asignación
+    try:
+        r = ensure_repo()
+        if r:
+            r.save_all()
+        else:
+            save_cupos(carreras_list)
+    except Exception as e:
+        print("Advertencia: no se pudo guardar cupos tras asignación:", e)
 
     return jsonify({"ok": True, "resultados": resultados})
 
@@ -301,8 +375,13 @@ def api_liberar_cupo(id_cupo):
                 cupo.aspirante = None
             except Exception:
                 pass
+        # actualizar repo y persistir
         try:
-            repo.actualizar_estado_cupo(cupo, "Disponible")
+            r = ensure_repo()
+            if r:
+                r.actualizar_estado_cupo(cupo, "Disponible")
+            else:
+                save_cupos(carreras_list)
         except Exception:
             pass
         return jsonify({"ok": True})
@@ -318,7 +397,11 @@ def api_eliminar_cupo(id_cupo):
     try:
         carrera.cupos = [c for c in carrera.cupos if str(getattr(c, "id_cupo", "")) != str(id_cupo)]
         try:
-            repo.actualizar_estado_cupo(cupo, "Eliminado")
+            r = ensure_repo()
+            if r:
+                r.actualizar_estado_cupo(cupo, "Eliminado")
+            else:
+                save_cupos(carreras_list)
         except Exception:
             pass
         return jsonify({"ok": True})
@@ -379,10 +462,22 @@ def student_accept_cupo():
                 setattr(cupo, "estado", "Aceptado")
             except Exception:
                 pass
+        # persistir mediante repo
         try:
-            repo.actualizar_estado_cupo(cupo, "Aceptado")
+            r = ensure_repo()
+            if r:
+                r.actualizar_estado_cupo(cupo, "Aceptado")
+            else:
+                save_cupos(carreras_list)
         except Exception:
             pass
+
+    # persistir aspirantes y cupos
+    try:
+        save_aspirantes(aspirantes_list)
+        save_cupos(carreras_list)
+    except Exception as e:
+        print("Advertencia: no se pudo persistir cambios tras aceptar cupo:", e)
 
     cedula = getattr(aspir, "cedula", "") or (aspir.get("cedula") if isinstance(aspir, dict) else "")
     report_url = "/student/reporte/" + str(cedula)
@@ -400,10 +495,20 @@ def student_reject_cupo():
     if str(est).lower() not in ("asignado", "aceptado", "assigned"):
         return jsonify({"error": "No hay un cupo asignado para rechazar"}), 400
 
-    if isinstance(aspir, dict):
-        aspir["estado"] = "Rechazado"
-    else:
-        aspir.estado = "Rechazado"
+    # marcar No asignado / Rechazado según prefieras
+    try:
+        if isinstance(aspir, dict):
+            aspir["estado"] = "No asignado"
+            # remover info de carrera asignada si existe
+            for fld in ("carrera_asignada", "carrera", "nombre_carrera"):
+                if fld in aspir:
+                    aspir[fld] = None
+        else:
+            aspir.estado = "No asignado"
+            if hasattr(aspir, "carrera_asignada"):
+                aspir.carrera_asignada = None
+    except Exception:
+        pass
 
     cupo, carrera = find_cupo_by_aspirante(aspir)
     if cupo:
@@ -415,8 +520,13 @@ def student_reject_cupo():
                 cupo.aspirante = None
             except Exception:
                 pass
+        # persistir mediante repo
         try:
-            repo.actualizar_estado_cupo(cupo, "Disponible")
+            r = ensure_repo()
+            if r:
+                r.actualizar_estado_cupo(cupo, "Disponible")
+            else:
+                save_cupos(carreras_list)
         except Exception:
             pass
 
@@ -427,6 +537,13 @@ def student_reject_cupo():
             contexto.asignar_cupos()
         except Exception:
             pass
+
+    # persistir aspirantes y cupos
+    try:
+        save_aspirantes(aspirantes_list)
+        save_cupos(carreras_list)
+    except Exception as e:
+        print("Advertencia: no se pudo persistir cambios tras rechazar cupo:", e)
 
     return jsonify({"ok": True})
 
@@ -453,20 +570,55 @@ def student_report(cedula):
 # Inicialización: cargar archivos por defecto si existen
 # ---------------------------
 def load_default_data():
-    global aspirantes_list, carreras_list, uni_global
-    if os.path.exists("BaseDatos.csv") and Cargar_datos:
-        try:
-            aspirantes_list = Cargar_datos("BaseDatos.csv").cargar()
+    """
+    Carga datos persistidos (JSON) si existen; luego intenta cargar CSV si está presente.
+    - Primero intenta cargar aspirantes desde data/aspirantes.json
+    - Si hay BaseDatos.csv y Cargar_datos disponible, lo carga (sobrescribe)
+    - Si hay Carreras.csv y CargarCarreras disponible, carga carreras y crea repo con referencia para mapear cupos
+    """
+    global aspirantes_list, carreras_list, uni_global, repo
+
+    # 1) intentar cargar aspirantes persistidos (JSON)
+    try:
+        persisted_asp = load_aspirantes()
+        if persisted_asp:
+            aspirantes_list = list(persisted_asp)  # serán dicts
+            # registrar usuarios tipo student
             for a in aspirantes_list:
                 try:
-                    usr = getattr(a, "cedula", None) if not isinstance(a, dict) else (a.get("identificiacion") or a.get("identificacion") or a.get("cedula"))
+                    usr = a.get("cedula") or a.get("identificacion") or a.get("identificiacion")
                 except Exception:
                     usr = None
                 if usr and str(usr) not in USERS:
-                    USERS[str(usr)] = {"role": "student", "username": str(usr), "password": str(usr), "name": getattr(a, "nombre", "") if not isinstance(a, dict) else (a.get("nombres") or a.get("nombre",""))}
-            print(f"Éxito: {len(aspirantes_list)} aspirantes listos.")
+                    USERS[str(usr)] = {"role": "student", "username": str(usr), "password": str(usr), "name": a.get("nombre", "")}
+            print(f"Cargados {len(aspirantes_list)} aspirantes desde data/aspirantes.json")
+    except Exception as e:
+        print("Advertencia al cargar aspirantes persistidos:", e)
+
+    # 2) Si existe BaseDatos.csv y Cargar_datos disponible, cargar CSV (opcional sobrescribir)
+    if os.path.exists("BaseDatos.csv") and Cargar_datos:
+        try:
+            aspir_csv = Cargar_datos("BaseDatos.csv").cargar()
+            if aspir_csv:
+                aspirantes_list = aspir_csv
+                # registrar usuarios
+                for a in aspirantes_list:
+                    try:
+                        usr = getattr(a, "cedula", None) if not isinstance(a, dict) else (a.get("identificiacion") or a.get("identificacion") or a.get("cedula"))
+                    except Exception:
+                        usr = None
+                    if usr and str(usr) not in USERS:
+                        USERS[str(usr)] = {"role": "student", "username": str(usr), "password": str(usr), "name": getattr(a, "nombre", "") if not isinstance(a, dict) else (a.get("nombres") or a.get("nombre",""))}
+                # persistir aspirantes cargados desde CSV
+                try:
+                    save_aspirantes(aspirantes_list)
+                except Exception as e:
+                    print("Advertencia: no se pudo guardar aspirantes cargados desde CSV:", e)
+                print(f"Éxito: {len(aspirantes_list)} aspirantes listos desde CSV.")
         except Exception as e:
-            print("Advertencia:", e)
+            print("Advertencia: no se pudieron cargar los aspirantes desde CSV.", e)
+
+    # 3) Cargar carreras desde CSV si existe
     if os.path.exists("Carreras.csv") and CargarCarreras:
         try:
             carreras_list_local = CargarCarreras("Carreras.csv").cargar(as_model=True)
@@ -485,8 +637,30 @@ def load_default_data():
             except Exception:
                 pass
             print(f"Éxito: {len(carreras_list_local)} carreras cargadas por defecto.")
+            # Instanciar repo con referencia a carreras (esto aplicará cupos persistidos si los hay)
+            try:
+                repo = RepositorioCupos(carreras_list_ref=carreras_list)
+                # Si no hay cupos.json pero hay cupos en memoria, persistirlos
+                try:
+                    repo.save_all()
+                except Exception:
+                    try:
+                        save_cupos(carreras_list)
+                    except Exception:
+                        pass
+            except Exception as e:
+                print("Advertencia: no se pudo instanciar repo al arrancar:", e)
         except Exception as e:
-            print("Advertencia:", e)
+            print("Advertencia: no se pudieron cargar las carreras por defecto.", e)
+    else:
+        # Si no hay CSV de carreras, aún podemos instanciar repo sin referencia (mantendrá registros internos)
+        try:
+            repo = RepositorioCupos(carreras_list_ref=carreras_list)
+        except Exception:
+            try:
+                repo = RepositorioCupos()
+            except Exception:
+                repo = None
 
 # Registrar carga inicial de forma compatible según versión de Flask
 if hasattr(app, "before_serving"):
