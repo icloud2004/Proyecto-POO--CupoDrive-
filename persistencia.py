@@ -148,3 +148,27 @@ def load_cupos(path: str = CUPOS_PATH) -> List[dict]:
 def save_cupos_from_records(records: List[dict], path: str = CUPOS_PATH) -> None:
     """Guarda directamente una lista de registros (cuando no se tiene la estructura de carreras)."""
     _save_json_atomic(path, records)
+
+
+SEGMENTOS_PATH = os.path.join(DATA_DIR, "segmentos.json")
+
+def save_segmentos(carreras_list: List, path: str = SEGMENTOS_PATH) -> None:
+    """
+    Guarda estructura de segmentos por carrera:
+    [ { "id_carrera": "...", "segmentos": [ {segmento dict}, ... ] }, ... ]
+    """
+    out = []
+    for c in carreras_list:
+        segs = []
+        for s in getattr(c, "segmentos", []):
+            try:
+                segs.append(s.to_dict())
+            except Exception:
+                # si es dict
+                segs.append(s if isinstance(s, dict) else {})
+        out.append({"id_carrera": getattr(c, "id_carrera", "") or getattr(c, "nombre", ""), "segmentos": segs})
+    _save_json_atomic(path, out)
+
+def load_segmentos(path: str = SEGMENTOS_PATH) -> List[dict]:
+    data = _load_json(path)
+    return data or []

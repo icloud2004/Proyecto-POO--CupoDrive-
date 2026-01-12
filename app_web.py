@@ -1,7 +1,8 @@
-
+# app_web.py (modificado: soporte de estrategias seleccionables y endpoints de segmentos)
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, abort
 import os
 import traceback
+import json
 
 # Intentar importar cargadores con varios nombres posibles (repos pueden variar)
 try:
@@ -17,37 +18,61 @@ except Exception:
     except Exception:
         CargarCarreras = None
 
-from Carrera import Carrera
-from Cupo import Cupo
-from Repositoriocupos import RepositorioCupos
-from Universidad import Universidad
-from Admin import Administrador
-
-# Intentar importar módulo de asignación con y sin tilde
+# Importar modelos y lógica
 try:
-    from Asignación_cupos import Asignacion_cupo, SegmentQuotaStrategy, MeritStrategy
+    from Carrera import Carrera
+except Exception:
+    Carrera = None
+
+try:
+    from Cupo import Cupo
+except Exception:
+    Cupo = None
+
+try:
+    from Repositoriocupos import RepositorioCupos
+except Exception:
+    RepositorioCupos = None
+
+try:
+    from Universidad import Universidad
+except Exception:
+    Universidad = None
+
+try:
+    from Admin import Administrador
+except Exception:
+    Administrador = None
+
+# Importar estrategias (varias variantes de nombre)
+try:
+    from Asignación_cupos import Asignacion_cupo, MultiSegmentStrategy, SegmentQuotaStrategy, MeritStrategy, LotteryStrategy
 except Exception:
     try:
-        from Asignación_cupos import Asignacion_cupo, SegmentQuotaStrategy, MeritStrategy
+        from Asignación_cupos import Asignacion_cupo, MultiSegmentStrategy, SegmentQuotaStrategy, MeritStrategy, LotteryStrategy
     except Exception:
         Asignacion_cupo = None
+        MultiSegmentStrategy = None
         SegmentQuotaStrategy = None
         MeritStrategy = None
+        LotteryStrategy = None
 
-# Importar persistencia JSON (guardar/leer)
+# Persistencia helpers (intentar importar)
 try:
-    from persistencia import save_aspirantes, load_aspirantes, save_cupos, load_cupos
+    from persistencia import save_aspirantes, load_aspirantes, save_cupos, load_cupos, save_segmentos, load_segmentos
 except Exception:
+    # shims básicos
     def save_aspirantes(*args, **kwargs):
-        print("persistencia.save_aspirantes no disponible")
-
+        pass
     def load_aspirantes(*args, **kwargs):
         return []
-
     def save_cupos(*args, **kwargs):
-        print("persistencia.save_cupos no disponible")
-
+        pass
     def load_cupos(*args, **kwargs):
+        return []
+    def save_segmentos(*args, **kwargs):
+        pass
+    def load_segmentos(*args, **kwargs):
         return []
 
 app = Flask(__name__)
@@ -59,16 +84,51 @@ app.secret_key = os.environ.get("CUPODRIVE_SECRET", "dev-secret-key")
 # ---------------------------
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
+os.makedirs(DATA_DIR, exist_ok=True)
+CONFIG_PATH = os.path.join(DATA_DIR, "config.json")
 
 carreras_list = []       # lista de instancias Carrera
 aspirantes_list = []     # lista de instancias Aspirante o dicts
 uni_global = None
 repo = None
 
+# Default strategy (persistido en data/config.json)
+DEFAULT_STRATEGY_NAME = "multi_segment"
+def load_config():
+    global DEFAULT_STRATEGY_NAME
+    try:
+        if os.path.exists(CONFIG_PATH):
+            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+                DEFAULT_STRATEGY_NAME = cfg.get("strategy", DEFAULT_STRATEGY_NAME)
+    except Exception:
+        pass
+
+def save_config():
+    try:
+        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+            json.dump({"strategy": DEFAULT_STRATEGY_NAME}, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+load_config()
+
+# Mapping of available strategies (strings -> classes)
+STRATEGIES = {}
+if MultiSegmentStrategy is not None:
+    STRATEGIES["multi_segment"] = MultiSegmentStrategy
+if SegmentQuotaStrategy is not None:
+    STRATEGIES["segment_quota"] = SegmentQuotaStrategy
+if MeritStrategy is not None:
+    STRATEGIES["merit"] = MeritStrategy
+if LotteryStrategy is not None:
+    STRATEGIES["lottery"] = LotteryStrategy
+
 def ensure_repo():
     global repo
     try:
-        if repo is None:
+        if repo is None and RepositorioCupos is not None:
             repo = RepositorioCupos(carreras_list_ref=carreras_list)
         else:
             if getattr(repo, "carreras_ref", None) is None and carreras_list:
@@ -82,23 +142,9 @@ def ensure_repo():
         traceback.print_exc()
     return repo
 
-USERS = {
-    "admin": {"role": "admin", "username": "admin", "password": "admin123", "name": "Administrador"},
-}
-
-def login_required(role=None):
-    def decorator(f):
-        from functools import wraps
-        @wraps(f)
-        def wrapped(*args, **kwargs):
-            if "user" not in session:
-                return redirect("/login" if "login" in globals() else "/")
-            if role and session["user"].get("role") != role:
-                return abort(403)
-            return f(*args, **kwargs)
-        return wrapped
-    return decorator
-
+# ---------------------------
+# Utils & finders
+# ---------------------------
 def find_cupo_by_id_global(id_cupo):
     for carrera in carreras_list:
         for cupo in getattr(carrera, "cupos", []):
@@ -117,26 +163,28 @@ def find_aspirante_by_cedula(cedula):
                     return a
     return None
 
-def find_cupo_by_aspirante(aspirante):
-    for carrera in carreras_list:
-        for cup in getattr(carrera, "cupos", []):
-            aspir = getattr(cup, "aspirante", None)
-            if aspir is None:
-                continue
-            try:
-                if aspir is aspirante:
-                    return cup, carrera
-                if getattr(aspir, "cedula", None) and getattr(aspirante, "cedula", None) and str(getattr(aspir, "cedula")) == str(getattr(aspirante, "cedula")):
-                    return cup, carrera
-            except Exception:
-                asp_ced = aspir.get("cedula") if isinstance(aspir, dict) else getattr(aspir, "cedula", None)
-                a_ced = aspirante.get("cedula") if isinstance(aspirante, dict) else getattr(aspirante, "cedula", None)
-                if asp_ced and a_ced and str(asp_ced) == str(a_ced):
-                    return cup, carrera
-    return None, None
+# ---------------------------
+# Auth decorator (simple)
+# ---------------------------
+USERS = {
+    "admin": {"role": "admin", "username": "admin", "password": "admin123", "name": "Administrador"},
+}
+
+def login_required(role=None):
+    def decorator(f):
+        from functools import wraps
+        @wraps(f)
+        def wrapped(*args, **kwargs):
+            if "user" not in session:
+                return redirect("/login" if "login" in globals() else "/")
+            if role and session["user"].get("role") != role:
+                return abort(403)
+            return f(*args, **kwargs)
+        return wrapped
+    return decorator
 
 # ---------------------------
-# RUTAS (login)
+# Routes: login / admin
 # ---------------------------
 @app.route("/", methods=["GET", "POST"])
 def login():
@@ -159,14 +207,14 @@ def logout():
     session.pop("user", None)
     return jsonify({"ok": True})
 
-# ---------------------------
-# RUTAS ADMIN (resumidas; mantiene lógica existente)
-# ---------------------------
 @app.route("/admin")
 @login_required(role="admin")
 def admin_dashboard():
     return render_template("admin.html", user=session.get("user", {}))
 
+# ---------------------------
+# Admin endpoints: upload, assign
+# ---------------------------
 @app.route("/admin/upload", methods=["POST"])
 @login_required(role="admin")
 def admin_upload():
@@ -185,7 +233,6 @@ def admin_upload():
         if Cargar_datos is None:
             return jsonify({"error": "Cargar_datos no está disponible en el servidor"}), 500
         try:
-            # reemplazamos la lista actual por la lista cargada (loader evita duplicados)
             aspirantes_list = Cargar_datos(aspir_path).cargar()
         except Exception as e:
             return jsonify({"error": f"Error cargando aspirantes: {e}"}), 500
@@ -199,7 +246,7 @@ def admin_upload():
             if usr and str(usr) not in USERS:
                 USERS[str(usr)] = {"role": "student", "username": str(usr), "password": str(usr), "name": getattr(a, "nombre", "") if not isinstance(a, dict) else (a.get("nombres") or a.get("nombre") or "")}
 
-        # Persistir aspirantes a JSON (persistencia hace dedupe al guardar)
+        # Persistir aspirantes a JSON (persistencia puede dedupe)
         try:
             save_aspirantes(aspirantes_list)
         except Exception as e:
@@ -225,6 +272,12 @@ def admin_upload():
         except Exception as e:
             return jsonify({"error": f"Error cargando carreras: {e}"}), 500
 
+        # persist segmentos if any present in carreras_list
+        try:
+            save_segmentos(carreras_list)
+        except Exception:
+            pass
+
         try:
             repo = RepositorioCupos(carreras_list_ref=carreras_list)
             try:
@@ -244,13 +297,25 @@ def admin_upload():
 def admin_assign_all():
     if not carreras_list or not aspirantes_list:
         return jsonify({"error": "No hay carreras o aspirantes cargados"}), 400
-    if Asignacion_cupo is None or SegmentQuotaStrategy is None:
+    if Asignacion_cupo is None:
         return jsonify({"error": "Módulo de asignación no disponible"}), 500
 
     resultados = {}
+    # select strategy class from default (persisted)
+    strategy_name = DEFAULT_STRATEGY_NAME
+    StrategyClass = STRATEGIES.get(strategy_name)
+    if StrategyClass is None:
+        # fallback to MultiSegmentStrategy if available
+        StrategyClass = MultiSegmentStrategy or SegmentQuotaStrategy or MeritStrategy
+
     for carrera in carreras_list:
-        contexto = Asignacion_cupo(carrera, aspirantes_list, SegmentQuotaStrategy())
-        asignados = contexto.asignar_cupos()
+        try:
+            contexto = Asignacion_cupo(carrera, aspirantes_list, StrategyClass())
+            asignados = contexto.asignar_cupos()
+        except Exception as e:
+            asignados = []
+            print("Error asignando a carrera", getattr(carrera, "nombre", ""), e)
+
         resultados[getattr(carrera, "id_carrera", getattr(carrera, "nombre", ""))] = {
             "nombre": getattr(carrera, "nombre", ""),
             "cupos_total": getattr(carrera, "oferta_cupos", len(getattr(carrera, "cupos", []))),
@@ -258,10 +323,14 @@ def admin_assign_all():
             "asignados": [ {"cedula": getattr(a, "cedula", "") if not isinstance(a, dict) else a.get("cedula",""), "nombre": getattr(a, "nombre", "") if not isinstance(a, dict) else (a.get("nombres") or a.get("nombre","")), "puntaje": getattr(a, "puntaje", "") if not isinstance(a, dict) else a.get("puntaje","")} for a in asignados ]
         }
 
+    # persistir cambios en cupos
     try:
         r = ensure_repo()
         if r:
-            r.save_all()
+            try:
+                r.save_all()
+            except Exception:
+                save_cupos(carreras_list)
         else:
             save_cupos(carreras_list)
     except Exception as e:
@@ -287,44 +356,50 @@ def api_carreras():
         })
     return jsonify(out)
 
+@app.route("/api/carreras/<carrera_id>/cupos", methods=["GET"])
+@login_required(role="admin")
+def api_carrera_cupos(carrera_id):
+    for c in carreras_list:
+        cid = getattr(c, "id_carrera", "") or getattr(c, "nombre", "")
+        if str(cid) == str(carrera_id) or getattr(c, "nombre", "") == carrera_id:
+            cupos = []
+            for cup in getattr(c, "cupos", []):
+                aspir = getattr(cup, "aspirante", None)
+                cupos.append({
+                    "id_cupo": getattr(cup, "id_cupo", ""),
+                    "estado": getattr(cup, "estado", ""),
+                    "aspirante": {
+                        "cedula": getattr(aspir, "cedula", "") if aspir else "",
+                        "nombre": getattr(aspir, "nombre", "") if aspir else ""
+                    } if aspir else None
+                })
+            return jsonify({"carrera": getattr(c, "nombre", ""), "cupos": cupos})
+    return jsonify({"error": "Carrera no encontrada"}), 404
+
 @app.route("/api/carreras/<carrera_id>/cupos", methods=["DELETE"])
 @login_required(role="admin")
 def api_eliminar_todos_cupos(carrera_id):
-    """
-    Elimina todos los cupos asociados a la carrera identificada por carrera_id (id_carrera o nombre).
-    Actualiza repo/persistencia.
-    """
     for c in carreras_list:
         cid = getattr(c, "id_carrera", "") or getattr(c, "nombre", "")
         if str(cid) == str(carrera_id) or getattr(c, "nombre", "") == carrera_id:
             try:
-                # contar y eliminar todos los cupos
                 removed_count = len(getattr(c, "cupos", []))
                 c.cupos = []
-
-                # (opcional) si quieres mantener oferta_cupos, comenta la siguiente línea
                 try:
                     c.oferta_cupos = 0
                 except Exception:
                     pass
-
-                # persistir cambios en repo / archivo
                 try:
                     r = ensure_repo()
-                    if r:
-                        if hasattr(r, "save_all"):
-                            r.save_all()
-                        else:
-                            save_cupos(carreras_list)
+                    if r and hasattr(r, "save_all"):
+                        r.save_all()
                     else:
                         save_cupos(carreras_list)
                 except Exception:
                     pass
-
                 return jsonify({"ok": True, "removed": removed_count})
             except Exception as e:
                 return jsonify({"error": "Error eliminando cupos: " + str(e)}), 500
-
     return jsonify({"error": "Carrera no encontrada"}), 404
 
 @app.route("/api/aspirantes", methods=["GET"])
@@ -351,21 +426,107 @@ def api_aspirantes():
     return jsonify(out)
 
 # ---------------------------
-# RUTAS ESTUDIANTE (omitidas aquí; mantienen lógica previa)
+# Endpoints de segmentos (GET/POST/PUT/DELETE)
 # ---------------------------
+from Segmento import Segmento
+
+@app.route("/api/carreras/<carrera_id>/segmentos", methods=["GET"])
+@login_required(role="admin")
+def api_get_segmentos(carrera_id):
+    for c in carreras_list:
+        cid = getattr(c, "id_carrera", "") or getattr(c, "nombre", "")
+        if str(cid) == str(carrera_id) or getattr(c, "nombre", "") == carrera_id:
+            segs = c.get_segmentos_dict() if hasattr(c, "get_segmentos_dict") else []
+            return jsonify({"ok": True, "segmentos": segs})
+    return jsonify({"error": "Carrera no encontrada"}), 404
+
+@app.route("/api/carreras/<carrera_id>/segmentos", methods=["POST"])
+@login_required(role="admin")
+def api_set_segmentos(carrera_id):
+    payload = request.get_json() or {}
+    segmentos_payload = payload.get("segmentos", [])
+    if not isinstance(segmentos_payload, list):
+        return jsonify({"error": "Payload inválido"}), 400
+    suma = sum([float(s.get("porcentaje", 0) or 0) for s in segmentos_payload])
+    if abs(suma - 100.0) > 0.0001:
+        return jsonify({"error": f"La suma de porcentajes debe ser 100. Actualmente: {suma}"}), 400
+    for c in carreras_list:
+        cid = getattr(c, "id_carrera", "") or getattr(c, "nombre", "")
+        if str(cid) == str(carrera_id) or getattr(c, "nombre", "") == carrera_id:
+            new_segments = []
+            for s in segmentos_payload:
+                seg = Segmento.from_dict(s)
+                new_segments.append(seg)
+            c.segmentos = new_segments
+            try:
+                save_segmentos(carreras_list)
+            except Exception:
+                pass
+            return jsonify({"ok": True, "segmentos": [x.to_dict() for x in new_segments]})
+    return jsonify({"error": "Carrera no encontrada"}), 404
+
+@app.route("/api/carreras/<carrera_id>/segmentos", methods=["PUT"])
+@login_required(role="admin")
+def api_update_segmento(carrera_id):
+    payload = request.get_json() or {}
+    nombre = payload.get("nombre")
+    if not nombre:
+        return jsonify({"error": "Falta nombre del segmento"}), 400
+    for c in carreras_list:
+        cid = getattr(c, "id_carrera", "") or getattr(c, "nombre", "")
+        if str(cid) == str(carrera_id) or getattr(c, "nombre", "") == carrera_id:
+            updated = c.actualizar_segmento(nombre, porcentaje=payload.get("porcentaje"), orden=payload.get("orden"), min_pct=payload.get("min_pct"), max_pct=payload.get("max_pct"), descripcion=payload.get("descripcion"))
+            if not updated:
+                seg = Segmento.from_dict(payload)
+                c.agregar_segmento(seg)
+            try:
+                save_segmentos(carreras_list)
+            except Exception:
+                pass
+            return jsonify({"ok": True, "segmentos": c.get_segmentos_dict()})
+    return jsonify({"error": "Carrera no encontrada"}), 404
+
+@app.route("/api/carreras/<carrera_id>/segmentos/<segmento_nombre>", methods=["DELETE"])
+@login_required(role="admin")
+def api_delete_segmento(carrera_id, segmento_nombre):
+    for c in carreras_list:
+        cid = getattr(c, "id_carrera", "") or getattr(c, "nombre", "")
+        if str(cid) == str(carrera_id) or getattr(c, "nombre", "") == carrera_id:
+            removed = c.eliminar_segmento(segmento_nombre)
+            try:
+                save_segmentos(carreras_list)
+            except Exception:
+                pass
+            if removed:
+                return jsonify({"ok": True})
+            return jsonify({"error": "Segmento no encontrado"}), 404
+    return jsonify({"error": "Carrera no encontrada"}), 404
 
 # ---------------------------
-# Inicialización: cargar archivos por defecto si existen (versión segura)
+# Config endpoints (strategy)
 # ---------------------------
+@app.route("/api/config/strategy", methods=["GET"])
+@login_required(role="admin")
+def api_get_strategy():
+    return jsonify({"strategy": DEFAULT_STRATEGY_NAME, "options": list(STRATEGIES.keys())})
 
+@app.route("/api/config/strategy", methods=["POST"])
+@login_required(role="admin")
+def api_set_strategy():
+    global DEFAULT_STRATEGY_NAME
+    payload = request.get_json() or {}
+    strategy = payload.get("strategy")
+    if not strategy or strategy not in STRATEGIES:
+        return jsonify({"error": "Strategy inválida"}), 400
+    DEFAULT_STRATEGY_NAME = strategy
+    save_config()
+    return jsonify({"ok": True, "strategy": DEFAULT_STRATEGY_NAME})
+
+# ---------------------------
+# Inicialización segura (carga predeterminada)
+# ---------------------------
 def load_default_data():
-    """
-    Carga datos persistidos (JSON) si existen; luego intenta cargar CSV si está presente.
-    Se asegura de limpiar listas globales antes de poblar para evitar duplicados.
-    """
     global aspirantes_list, carreras_list, uni_global, repo
-
-    # Evitar duplicación: reiniciar las listas globales
     try:
         aspirantes_list = []
     except Exception:
@@ -375,11 +536,11 @@ def load_default_data():
     except Exception:
         pass
 
-    # 1) intentar cargar aspirantes persistidos (JSON)
+    # cargar aspirantes persistidos
     try:
         persisted_asp = load_aspirantes()
         if persisted_asp:
-            aspirantes_list = list(persisted_asp)  # serán dicts
+            aspirantes_list = list(persisted_asp)
             for a in aspirantes_list:
                 try:
                     usr = a.get("cedula") or a.get("identificacion") or a.get("identificiacion")
@@ -391,7 +552,7 @@ def load_default_data():
     except Exception as e:
         print("Advertencia al cargar aspirantes persistidos:", e)
 
-    # 2) Si existe BaseDatos.csv y Cargar_datos disponible, cargar CSV (opcional sobrescribir)
+    # cargar CSV aspirantes si existe (sobrescribe)
     if os.path.exists("BaseDatos.csv") and Cargar_datos:
         try:
             aspir_csv = Cargar_datos("BaseDatos.csv").cargar()
@@ -412,7 +573,7 @@ def load_default_data():
         except Exception as e:
             print("Advertencia: no se pudieron cargar los aspirantes desde CSV.", e)
 
-    # 3) Cargar carreras desde CSV si existe
+    # CARGA DE CARRERAS Y RECONSTRUCCIÓN DE CUPOS (respeta data/cupos.json y data/segmentos.json si existen)
     if os.path.exists("Carreras.csv") and CargarCarreras:
         try:
             carreras_list_local = CargarCarreras("Carreras.csv").cargar(as_model=True)
@@ -420,6 +581,7 @@ def load_default_data():
                 carreras_list.extend(carreras_list_local)
             else:
                 carreras_list = list(carreras_list_local)
+
             try:
                 uni = Universidad(id_universidad="102", nombre="UNIVERSIDAD (cargada)", direccion="", telefono="", correo="", estado="Activa")
                 for c in carreras_list_local:
@@ -430,7 +592,99 @@ def load_default_data():
                 globals()['uni_global'] = uni
             except Exception:
                 pass
-            print(f"Éxito: {len(carreras_list_local)} carreras cargadas por defecto.")
+
+            # cargar cupos persistidos si existe
+            cupos_file_path = os.path.join(os.path.dirname(__file__), "data", "cupos.json")
+            segment_file_path = os.path.join(os.path.dirname(__file__), "data", "segmentos.json")
+            cupos_exist_file = os.path.exists(cupos_file_path)
+            # aplicar segmentos si existen
+            if os.path.exists(segment_file_path):
+                try:
+                    segs_data = load_segmentos()
+                    # segs_data: [ {id_carrera, segmentos: [{...}]}, ... ]
+                    for rec in segs_data:
+                        cid = rec.get("id_carrera")
+                        segs = rec.get("segmentos", [])
+                        for c in carreras_list:
+                            if str(getattr(c, "id_carrera", "") or getattr(c, "nombre","")) == str(cid):
+                                c.segmentos = [ Segmento.from_dict(s) for s in segs ]
+                except Exception:
+                    pass
+
+            if cupos_exist_file:
+                persisted = load_cupos()
+                # agrupar por carrera_id
+                from collections import defaultdict
+                records_by_carrera = defaultdict(list)
+                for rec in (persisted or []):
+                    key = str(rec.get("carrera_id") or rec.get("carrera_nombre") or "").strip()
+                    records_by_carrera[key].append(rec)
+                from Cupo import Cupo as CupoClass
+                for c in carreras_list:
+                    cid_key = str(getattr(c, "id_carrera", "") or getattr(c, "nombre", "")).strip()
+                    recs = records_by_carrera.get(cid_key) or records_by_carrera.get(getattr(c, "nombre", ""))
+                    if recs is None:
+                        # generar cupos si no existían y no hay persistencia
+                        if not getattr(c, "cupos", None):
+                            c.cupos = []
+                            for i in range(1, max(0, getattr(c, "oferta_cupos", 0)) + 1):
+                                try:
+                                    c.cupos.append(CupoClass(id_cupo=f"{getattr(c,'id_carrera','')}-{i}", carrera=getattr(c, "nombre", "")))
+                                except Exception:
+                                    cup = type("SimpleCupo", (), {})()
+                                    setattr(cup, "id_cupo", f"{getattr(c,'id_carrera','')}-{i}")
+                                    setattr(cup, "carrera", getattr(c, "nombre", ""))
+                                    setattr(cup, "estado", "Disponible")
+                                    setattr(cup, "aspirante", None)
+                                    c.cupos.append(cup)
+                    else:
+                        # if persisted is empty list => respect absence of cupos
+                        if len(recs) == 0:
+                            c.cupos = []
+                            continue
+                        recs_sorted = sorted(recs, key=lambda r: str(r.get("id_cupo", "")))
+                        new_cupos = []
+                        for rec in recs_sorted:
+                            try:
+                                cupo_obj = CupoClass(id_cupo=rec.get("id_cupo"), carrera=getattr(c, "nombre", ""))
+                            except Exception:
+                                cupo_obj = type("SimpleCupo", (), {})()
+                                setattr(cupo_obj, "id_cupo", rec.get("id_cupo"))
+                                setattr(cupo_obj, "carrera", getattr(c, "nombre", ""))
+                            try:
+                                setattr(cupo_obj, "estado", rec.get("estado", "") or "Disponible")
+                            except Exception:
+                                pass
+                            aspir_ced = str(rec.get("aspirante_cedula", "") or "").strip()
+                            if aspir_ced:
+                                aspir_obj = find_aspirante_by_cedula(aspir_ced)
+                                if aspir_obj:
+                                    try:
+                                        setattr(cupo_obj, "aspirante", aspir_obj)
+                                    except Exception:
+                                        pass
+                            new_cupos.append(cupo_obj)
+                        c.cupos = new_cupos
+
+            else:
+                # no existe archivo de cupos -> generar desde oferta
+                for c in carreras_list:
+                    try:
+                        if not getattr(c, "cupos", None):
+                            c.cupos = []
+                            for i in range(1, max(0, getattr(c, "oferta_cupos", 0)) + 1):
+                                try:
+                                    c.cupos.append(Cupo(id_cupo=f"{getattr(c,'id_carrera','')}-{i}", carrera=getattr(c, "nombre", "")))
+                                except Exception:
+                                    cup = type("SimpleCupo", (), {})()
+                                    setattr(cup, "id_cupo", f"{getattr(c,'id_carrera','')}-{i}")
+                                    setattr(cup, "carrera", getattr(c, "nombre", ""))
+                                    setattr(cup, "estado", "Disponible")
+                                    setattr(cup, "aspirante", None)
+                                    c.cupos.append(cup)
+                    except Exception:
+                        pass
+
             try:
                 repo = RepositorioCupos(carreras_list_ref=carreras_list)
                 try:
@@ -442,6 +696,8 @@ def load_default_data():
                         pass
             except Exception as e:
                 print("Advertencia: no se pudo instanciar repo al arrancar:", e)
+
+            print(f"Éxito: {len(carreras_list_local)} carreras cargadas por defecto.")
         except Exception as e:
             print("Advertencia: no se pudieron cargar las carreras por defecto.", e)
     else:
@@ -453,21 +709,12 @@ def load_default_data():
             except Exception:
                 repo = None
 
-# Inicialización segura: cargar datos UNA VEZ (evita duplicados por reloader)
+# Ejecutar load_default_data solo en proceso correcto para evitar duplicado por reloader
 def load_default_data_once():
-    """
-    Ejecuta load_default_data sólo en el proceso correcto cuando Flask está en modo debug
-    (WERKZEUG_RUN_MAIN == "true") o cuando no hay reloader.
-    """
     is_reloader_child = os.environ.get("WERKZEUG_RUN_MAIN") == "true"
     is_flask_cli = os.environ.get("FLASK_RUN_FROM_CLI") == "true"
-
-    # cargamos si estamos en el proceso hijo del reloader (caso común con flask run)
-    # o si no estamos en debug (producción) o si estamos ejecutando desde CLI
     if not (is_reloader_child or is_flask_cli or not app.debug):
         return
-
-    # Llamamos a la función real de carga (ya limpia listas internamente)
     try:
         load_default_data()
     except Exception:

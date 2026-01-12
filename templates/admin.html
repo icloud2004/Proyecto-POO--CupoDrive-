@@ -47,6 +47,16 @@
               <label class="form-label">Archivo carreras (Carreras.csv)</label>
               <input id="fileCarreras" name="carreras" type="file" class="form-control" accept=".csv">
             </div>
+
+            <div class="mb-3">
+              <label class="form-label">Estrategia de asignación por defecto</label>
+              <div class="input-group">
+                <select id="selectStrategy" class="form-select"></select>
+                <button id="btnSetStrategy" type="button" class="btn btn-outline-primary">Guardar estrategia</button>
+              </div>
+              <div class="form-text">Selecciona la estrategia que usará el sistema al asignar cupos.</div>
+            </div>
+
             <button id="btnUpload" type="button" class="btn btn-primary">Subir y cargar</button>
             <span class="mx-2"></span>
             <button id="btnAssignAll" type="button" class="btn btn-success">Asignar cupos automáticamente</button>
@@ -127,6 +137,44 @@
       </div>
     </div>
 
+    <!-- Modal gestionar segmentos -->
+    <div class="modal fade" id="modalSegmentos" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Gestionar segmentos - <span id="segCarreraNombre"></span></h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+          </div>
+          <div class="modal-body">
+            <div id="segmentosList"></div>
+            <hr>
+            <h6>Añadir / Editar segmento</h6>
+            <form id="formSegmento">
+              <div class="row g-2">
+                <div class="col-md-5">
+                  <input id="segNombre" class="form-control" placeholder="Nombre del segmento" required>
+                </div>
+                <div class="col-md-3">
+                  <input id="segPorcentaje" type="number" min="0" max="100" step="0.1" class="form-control" placeholder="Porcentaje (%)" required>
+                </div>
+                <div class="col-md-2">
+                  <input id="segOrden" type="number" min="1" class="form-control" placeholder="Orden" required>
+                </div>
+                <div class="col-md-2">
+                  <button id="btnAddSeg" class="btn btn-primary">Añadir/Actualizar</button>
+                </div>
+              </div>
+            </form>
+            <div id="segError" class="alert alert-danger mt-3 d-none"></div>
+          </div>
+          <div class="modal-footer">
+            <button id="btnSaveSeg" type="button" class="btn btn-success">Guardar segmentos</button>
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
       // helper fetch que incluye cookies
@@ -140,6 +188,25 @@
           throw new Error((data && data.error) ? data.error : (text || res.statusText));
         }
         return data;
+      }
+
+      // Load strategies into dropdown
+      async function loadStrategies() {
+        try {
+          const cfg = await api('/api/config/strategy', { method: 'GET' });
+          const sel = document.getElementById('selectStrategy');
+          sel.innerHTML = '';
+          const options = cfg.options || [];
+          options.forEach(o => {
+            const opt = document.createElement('option');
+            opt.value = o;
+            opt.textContent = o;
+            if (cfg.strategy === o) opt.selected = true;
+            sel.appendChild(opt);
+          });
+        } catch (e) {
+          console.warn('No se pudo cargar estrategias:', e.message);
+        }
       }
 
       // Navegación de paneles
@@ -161,6 +228,22 @@
         await cargarAspirantes();
       });
 
+      // Set default strategy
+      document.getElementById('btnSetStrategy')?.addEventListener('click', async () => {
+        const sel = document.getElementById('selectStrategy');
+        const strategy = sel.value;
+        try {
+          await api('/api/config/strategy', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ strategy })
+          });
+          alert('Estrategia guardada.');
+        } catch (e) {
+          alert('Error guardando estrategia: ' + e.message);
+        }
+      });
+
       // Upload
       document.getElementById('btnUpload')?.addEventListener('click', async () => {
         const form = document.getElementById('uploadForm');
@@ -174,6 +257,7 @@
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || 'Error al subir');
           alert('Archivos subidos correctamente.');
+          await loadStrategies();
         } catch (e) {
           alert('Error: ' + e.message);
         }
@@ -223,6 +307,7 @@
               <div>
                 <button class="btn btn-sm btn-outline-primary me-2 btn-ver-cupos" data-id="${c.id}" data-nombre="${c.nombre}" data-campus="${c.campus || ''}">Ver cupos</button>
                 <button class="btn btn-sm btn-outline-secondary me-2 btn-editar-cupos" data-id="${c.id}" data-nombre="${c.nombre}" data-oferta="${c.oferta_cupos}" data-campus="${c.campus || ''}">Editar cupos</button>
+                <button class="btn btn-sm btn-outline-warning me-2 btn-segmentos" data-id="${c.id}" data-nombre="${c.nombre}">Segmentos</button>
                 <button class="btn btn-sm btn-outline-danger btn-eliminar-cupos" data-id="${c.id}">Eliminar todos cupos</button>
               </div>
             `;
@@ -307,7 +392,16 @@
             });
           });
 
-          // --------- NUEVO HANDLER: Eliminar todos los cupos (usa endpoint DELETE dedicado) ----------
+          // Segmentos button
+          document.querySelectorAll('.btn-segmentos').forEach(btn => {
+            btn.addEventListener('click', () => {
+              const id = btn.getAttribute('data-id');
+              const nombre = btn.getAttribute('data-nombre');
+              abrirModalSegmentos(id, nombre);
+            });
+          });
+
+          // Eliminar todos cupos (usa endpoint DELETE dedicado)
           document.querySelectorAll('.btn-eliminar-cupos').forEach(btn => {
             btn.addEventListener('click', async () => {
               if (!confirm('¿Eliminar todos los cupos de esta carrera? Esta acción puede afectar asignaciones.')) return;
@@ -315,12 +409,10 @@
               if (!id) return alert('Identificador de carrera no disponible.');
 
               try {
-                // Llamada directa al endpoint DELETE dedicado (mejor que borrar cupo por cupo)
                 await api(`/api/carreras/${encodeURIComponent(id)}/cupos`, { method: 'DELETE' });
                 alert('Cupos eliminados.');
                 await cargarColegios();
               } catch (e) {
-                // Fallback: intentar borrar cupo por cupo si el endpoint DELETE no existe
                 try {
                   const data = await api(`/api/carreras/${encodeURIComponent(id)}/cupos`, { method: 'GET' });
                   if (data && data.cupos) {
@@ -336,7 +428,6 @@
               }
             });
           });
-          // -----------------------------------------------------------------------------------------
 
         } catch (e) {
           console.error(e);
@@ -413,8 +504,123 @@
         }
       });
 
-      // Arranque: seleccionar panel upload por defecto
+      // Segmentos modal logic (functions reused from previous instructions)
+      let currentSegCarreraId = null;
+      const modalSeg = new bootstrap.Modal(document.getElementById('modalSegmentos'));
+
+      async function abrirModalSegmentos(id, nombre) {
+        currentSegCarreraId = id;
+        document.getElementById('segCarreraNombre').textContent = nombre;
+        document.getElementById('segError').classList.add('d-none');
+        document.getElementById('segmentosList').innerHTML = '<p>Cargando...</p>';
+        try {
+          const res = await api(`/api/carreras/${encodeURIComponent(id)}/segmentos`, { method: 'GET' });
+          const segs = res.segmentos || [];
+          renderSegmentosList(segs);
+          modalSeg.show();
+        } catch (e) {
+          alert('Error al cargar segmentos: ' + e.message);
+        }
+      }
+
+      function renderSegmentosList(segs) {
+        const cont = document.getElementById('segmentosList');
+        if (!segs || segs.length === 0) {
+          cont.innerHTML = '<p>No hay segmentos configurados.</p>';
+          return;
+        }
+        let html = '<table class="table table-sm"><thead><tr><th>Orden</th><th>Nombre</th><th>%</th><th>Acciones</th></tr></thead><tbody>';
+        segs.forEach(s => {
+          html += `<tr>
+            <td>${s.orden}</td>
+            <td>${s.nombre}</td>
+            <td>${s.porcentaje}</td>
+            <td>
+              <button class="btn btn-sm btn-outline-secondary btn-edit-seg" data-json='${JSON.stringify(s).replace(/'/g,"&#39;")}'>Editar</button>
+              <button class="btn btn-sm btn-outline-danger btn-del-seg" data-nombre='${s.nombre}'>Eliminar</button>
+            </td>
+          </tr>`;
+        });
+        html += '</tbody></table>';
+        cont.innerHTML = html;
+
+        document.querySelectorAll('.btn-edit-seg').forEach(b => {
+          b.addEventListener('click', () => {
+            const s = JSON.parse(b.getAttribute('data-json'));
+            document.getElementById('segNombre').value = s.nombre;
+            document.getElementById('segPorcentaje').value = s.porcentaje;
+            document.getElementById('segOrden').value = s.orden;
+          });
+        });
+        document.querySelectorAll('.btn-del-seg').forEach(b => {
+          b.addEventListener('click', async () => {
+            if (!confirm('¿Eliminar segmento?')) return;
+            const nombre = b.getAttribute('data-nombre');
+            try {
+              await api(`/api/carreras/${encodeURIComponent(currentSegCarreraId)}/segmentos/${encodeURIComponent(nombre)}`, { method: 'DELETE' });
+              const res = await api(`/api/carreras/${encodeURIComponent(currentSegCarreraId)}/segmentos`, { method: 'GET' });
+              renderSegmentosList(res.segmentos || []);
+            } catch (e) {
+              alert('Error: ' + e.message);
+            }
+          });
+        });
+      }
+
+      document.getElementById('formSegmento')?.addEventListener('submit', (ev) => {
+        ev.preventDefault();
+        const nombre = document.getElementById('segNombre').value.trim();
+        const porcentaje = parseFloat(document.getElementById('segPorcentaje').value);
+        const orden = parseInt(document.getElementById('segOrden').value, 10) || 100;
+        if (!nombre || isNaN(porcentaje)) {
+          document.getElementById('segError').textContent = 'Datos inválidos';
+          document.getElementById('segError').classList.remove('d-none');
+          return;
+        }
+        (async () => {
+          try {
+            await api(`/api/carreras/${encodeURIComponent(currentSegCarreraId)}/segmentos`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ nombre, porcentaje, orden })
+            });
+            const res = await api(`/api/carreras/${encodeURIComponent(currentSegCarreraId)}/segmentos`, { method: 'GET' });
+            renderSegmentosList(res.segmentos || []);
+            document.getElementById('segNombre').value = '';
+            document.getElementById('segPorcentaje').value = '';
+            document.getElementById('segOrden').value = '';
+            document.getElementById('segError').classList.add('d-none');
+          } catch (e) {
+            document.getElementById('segError').textContent = e.message;
+            document.getElementById('segError').classList.remove('d-none');
+          }
+        })();
+      });
+
+      document.getElementById('btnSaveSeg')?.addEventListener('click', async () => {
+        try {
+          const rows = Array.from(document.querySelectorAll('#segmentosList table tbody tr'));
+          const segmentos = rows.map(r => {
+            const cols = r.querySelectorAll('td');
+            return { orden: parseInt(cols[0].textContent.trim()), nombre: cols[1].textContent.trim(), porcentaje: parseFloat(cols[2].textContent.trim()) };
+          });
+          const suma = segmentos.reduce((s, x) => s + (parseFloat(x.porcentaje) || 0), 0);
+          if (Math.abs(suma - 100.0) > 0.0001) {
+            alert('La suma de porcentajes debe ser 100. Actualmente: ' + suma);
+            return;
+          }
+          await api(`/api/carreras/${encodeURIComponent(currentSegCarreraId)}/segmentos`, { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ segmentos }) });
+          modalSeg.hide();
+          await cargarColegios();
+          alert('Segmentos guardados.');
+        } catch (e) {
+          alert('Error al guardar segmentos: ' + e.message);
+        }
+      });
+
+      // Arranque: seleccionar panel upload por defecto y cargar estrategias
       document.getElementById('menuUpload').click();
+      loadStrategies();
     </script>
   </body>
 </html>

@@ -1,51 +1,40 @@
-
-# Estrategias y controlador para la asignación de cupos por carrera.
-# Contiene: AssignmentStrategy (interfaz), MeritStrategy, LotteryStrategy,
-# SegmentQuotaStrategy (implementación custom según reglas de prioridad/segmento/puntaje)
-# y la clase Asignacion_cupo que orquesta la asignación usando una estrategia.
-
 from abc import ABC, abstractmethod
-import random
 import math
+from typing import List
+import random
 
-# ------------------------
-# INTERFAZ STRATEGY
-# ------------------------
-class AssignmentStrategy(ABC):
+# Helpers (compatibles con estructuras dict/objeto)
+def _get_score(a):
+    try:
+        if isinstance(a, dict):
+            return float(a.get("puntaje_postulacion") or a.get("puntaje") or 0)
+        return float(getattr(a, "puntaje", 0))
+    except Exception:
+        return 0.0
 
-    @abstractmethod
-    def assign(self, carrera, aspirantes):
-        """Devuelve lista de aspirantes asignados (y realiza la asignación en objetos Cupo)."""
-        pass
+def _get_cedula(a):
+    try:
+        if isinstance(a, dict):
+            return str(a.get("identificiacion") or a.get("identificacion") or a.get("cedula") or "")
+        return str(getattr(a, "cedula", "") or "")
+    except Exception:
+        return ""
 
-    def resolver_empates(self, empatados, cupos_disponibles):
-        """
-        Método por defecto.
-        Las estrategias pueden sobrescribirlo.
-        """
-        return empatados[:cupos_disponibles]
+def _stable_sort(candidates, reverse=True):
+    # orden por puntaje; tie-breaker por cédula asc (determinista)
+    return sorted(candidates, key=lambda x: (_get_score(x), _get_cedula(x)), reverse=reverse)
 
-
-# ------------------------
-# HELPERS COMUNES
-# ------------------------
 def _postulados_para_carrera(carrera, aspirantes):
     """
-    Devuelve aspirantes que están 'Postulado' y que son elegibles para la carrera.
-    Compatibilidad con objetos y dicts.
-    Filtra además por campus/sede si la carrera tiene atributo 'campus'.
+    Filtra aspirantes 'Postulado' y por campus si carrera.campus existe.
     """
     out = []
     campus_carrera = getattr(carrera, "campus", None) or getattr(carrera, "sede", None)
     for a in aspirantes:
         try:
             estado = getattr(a, "estado", None) if not isinstance(a, dict) else a.get("estado")
-            if estado is None:
+            if estado is None or str(estado).strip().lower() != "postulado":
                 continue
-            if str(estado).strip().lower() != "postulado":
-                continue
-
-            # Filtrado por campus: si la carrera tiene campus definido, el aspirante debe pertenecer a ese campus
             if campus_carrera:
                 if isinstance(a, dict):
                     campus_asp = a.get("campus") or a.get("CAN_NOMBRE") or ""
@@ -53,20 +42,12 @@ def _postulados_para_carrera(carrera, aspirantes):
                     campus_asp = getattr(a, "campus", None) or getattr(a, "sede", None) or ""
                 if campus_asp is None or str(campus_asp).strip().lower() != str(campus_carrera).strip().lower():
                     continue
-
             out.append(a)
         except Exception:
             continue
     return out
 
-
 def _asignar_a_lista(cupos, aspirantes_seleccionados, carrera):
-    """
-    Toma dos listas emparejadas (cupos y aspirantes) y realiza la asignación:
-    - llama cupo.asignar_aspirante(aspirante) si existe
-    - asigna atributos aspirante.carrera_asignada y aspirante.estado
-    Devuelve la lista de aspirantes asignados.
-    """
     asignados = []
     for cupo, aspirante in zip(cupos, aspirantes_seleccionados):
         try:
@@ -81,7 +62,6 @@ def _asignar_a_lista(cupos, aspirantes_seleccionados, carrera):
                 cupo.estado = "Asignado"
             except Exception:
                 pass
-
         try:
             if isinstance(aspirante, dict):
                 aspirante["carrera_asignada"] = getattr(carrera, "nombre", carrera)
@@ -91,124 +71,33 @@ def _asignar_a_lista(cupos, aspirantes_seleccionados, carrera):
                 setattr(aspirante, "estado", "Asignado")
         except Exception:
             pass
-
         asignados.append(aspirante)
     return asignados
 
-
-# ------------------------
-# ESTRATEGIAS CONCRETAS
-# ------------------------
-class MeritStrategy(AssignmentStrategy):
-    """
-    Asignación por mérito: ordena postulados por puntaje descendente y asigna cupos disponibles.
-    Resuelve empates con resolver_empates (por defecto toma los primeros).
-    """
-
+# Interfaz
+class AssignmentStrategy(ABC):
+    @abstractmethod
     def assign(self, carrera, aspirantes):
-        postulados = _postulados_para_carrera(carrera, aspirantes)
-        ordenados = sorted(
-            postulados,
-            key=lambda x: float(getattr(x, "puntaje", 0) if not isinstance(x, dict) else (x.get("puntaje_postulacion") or x.get("puntaje") or 0)),
-            reverse=True
-        )
+        pass
 
-        cupos = [c for c in getattr(carrera, "cupos", []) if getattr(c, "estado", "") == "Disponible"]
-        asignados = []
-        i = 0
-
-        while i < len(ordenados) and len(asignados) < len(cupos):
-            mismo_puntaje = [ordenados[i]]
-            j = i + 1
-
-            while j < len(ordenados) and float(getattr(ordenados[j], "puntaje", getattr(ordenados[j], "puntaje_postulacion", 0) if isinstance(ordenados[j], dict) else 0)) == float(getattr(ordenados[i], "puntaje", getattr(ordenados[i], "puntaje_postulacion", 0) if isinstance(ordenados[i], dict) else 0)):
-                mismo_puntaje.append(ordenados[j])
-                j += 1
-
-            espacios = len(cupos) - len(asignados)
-
-            if len(mismo_puntaje) <= espacios:
-                asignados.extend(mismo_puntaje)
-            else:
-                seleccionados = self.resolver_empates(mismo_puntaje, espacios)
-                asignados.extend(seleccionados)
-
-            i = j
-
-        return _asignar_a_lista(cupos[:len(asignados)], asignados, carrera)
-
-    def resolver_empates(self, empatados, cupos_disponibles):
-        return random.sample(empatados, cupos_disponibles)
-
-
-class LotteryStrategy(AssignmentStrategy):
+# Estrategia multi-segmentos
+class MultiSegmentStrategy(AssignmentStrategy):
     """
-    Asignación por lotería: selecciona al azar entre postulados el número de cupos disponibles.
+    Asigna cupos por segmentos según porcentajes configurados en la carrera.
+    - La carrera debe tener .segmentos: lista de Segmento con .porcentaje y .orden
+    - Reglas:
+      - Primero ordenar segmentos por .orden asc (1,2,3,...).
+      - Para cada segmento calcular cupos = round(oferta_total * porcentaje/100) (ajustes más abajo).
+      - Dentro de cada segmento, ordenar postulantes por puntaje (desc) y asignar hasta completar su cuota.
+      - Si un postulante pertenece a varios segmentos se considera inicialmente en el segmento con menor orden (el que más le favorezca según política).
+      - Si un segmento no consume todos sus cupos (falta de postulantes), los cupos se liberan a Población general.
+      - Finalmente, rellenar los cupos restantes con Población general ordenada por puntaje.
     """
-
-    def assign(self, carrera, aspirantes):
-        postulados = _postulados_para_carrera(carrera, aspirantes)
-        cupos = [c for c in getattr(carrera, "cupos", []) if getattr(c, "estado", "") == "Disponible"]
-
-        n = min(len(cupos), len(postulados))
-        if n == 0:
-            return []
-
-        seleccion = random.sample(postulados, k=n)
-        return _asignar_a_lista(cupos[:n], seleccion, carrera)
-
-    def resolver_empates(self, empatados, cupos_disponibles):
-        return random.sample(empatados, cupos_disponibles)
-
-
-# ------------------------
-# SegmentQuotaStrategy (nueva implementación según reglas solicitadas)
-# ------------------------
-class SegmentQuotaStrategy(AssignmentStrategy):
-    """
-    Estrategia que:
-    - Prioriza por 'prioridad' (1 primero, luego 2) dentro de población general (segmento 1).
-    - Reserva entre 5% y 10% del total de cupos para segmento 2 (política de cuotas).
-      - El mínimo es 5% (si hay candidatos), el máximo es 10%.
-    - Ordena por puntaje dentro de cada grupo.
-    """
-
-    def __init__(self):
-        super().__init__()
-
-    def _get_segment(self, a):
-        try:
-            if isinstance(a, dict):
-                return str(a.get("segmento") or a.get("grupo") or "").strip()
-            return str(getattr(a, "segmento", None) or getattr(a, "grupo", None) or "").strip()
-        except Exception:
-            return ""
-
-    def _get_priority(self, a):
-        try:
-            if isinstance(a, dict):
-                p = a.get("prioridad")
-            else:
-                p = getattr(a, "prioridad", None)
-            if p is None or str(p).strip() == "":
-                return 2
-            return int(p)
-        except Exception:
-            try:
-                return int(float(str(p)))
-            except Exception:
-                return 2
-
-    def _get_score(self, a):
-        try:
-            if isinstance(a, dict):
-                return float(a.get("puntaje_postulacion") or a.get("puntaje") or a.get("puntaje_post") or 0)
-            return float(getattr(a, "puntaje", 0))
-        except Exception:
-            try:
-                return float(str(getattr(a, "puntaje", 0)))
-            except Exception:
-                return 0.0
+    def __init__(self, tie_breaker:str="stable", random_seed:int=42):
+        self.tie_breaker = tie_breaker
+        self.random_seed = random_seed
+        if tie_breaker == "random":
+            random.seed(random_seed)
 
     def assign(self, carrera, aspirantes):
         cupos = [c for c in getattr(carrera, "cupos", []) if getattr(c, "estado", "") == "Disponible"]
@@ -216,104 +105,153 @@ class SegmentQuotaStrategy(AssignmentStrategy):
         if total_slots == 0:
             return []
 
+        oferta_total = int(getattr(carrera, "oferta_cupos", total_slots))
+
+        # obtener segmentos ordenados
+        segmentos = carrera.obtener_segmentos_ordenados()
+        # si no hay segmentos definidos, crear default: Población general 100%
+        if not segmentos:
+            from Segmento import Segmento
+            segmentos = [Segmento("Población general", porcentaje=100.0, orden=999)]
+
+        # normalizar porcentajes (garantizar suma 100 si admin lo garantiza)
+        suma_pct = sum([float(s.porcentaje or 0.0) for s in segmentos])
+        if suma_pct <= 0:
+            # fallback: todo a Población general
+            segmentos = [type("S", (), {"nombre":"Población general", "porcentaje":100.0, "orden":999})()]
+
+        # calcular cupos por segmento (usamos round, luego ajustamos sobrante)
+        cuotas = []
+        acc = 0
+        for s in segmentos:
+            n = int(round(oferta_total * (float(s.porcentaje or 0.0) / 100.0)))
+            cuotas.append(n)
+            acc += n
+        # ajustar diferencia por redondeo
+        diff = oferta_total - acc
+        if diff != 0:
+            # aplicar ajuste al segmento de Población general si existe, si no al último segmento
+            idx_pop = None
+            for i, s in enumerate(segmentos):
+                if s.nombre.strip().lower().startswith("pobl"):
+                    idx_pop = i
+                    break
+            if idx_pop is None:
+                # ajustar último segmento
+                cuotas[-1] += diff
+            else:
+                cuotas[idx_pop] += diff
+
+        # Preparar postulantes y asignarles un segmento inicial (el que más les favorezca = menor orden en segmentos que coincida)
         postulados = _postulados_para_carrera(carrera, aspirantes)
 
-        quota_candidates = []
-        general_candidates = []
-        for a in postulados:
-            seg = self._get_segment(a)
-            if seg == "2":
-                quota_candidates.append(a)
+        # Determinar pertenencia a segmentos para cada aspirante:
+        # - Si el aspirante tiene atributo 'segmentos' (lista de nombres), usamos eso.
+        # - Si solo tiene 'segmento' numérico o etiqueta simple, lo mapeamos a nombres existentes si coincide.
+        # - En caso contrario lo colocamos en 'Población general'.
+        def aspirante_segment_members(asp):
+            segs = []
+            if isinstance(asp, dict):
+                # posible campo 'segmentos' como lista en JSON
+                if "segmentos" in asp and isinstance(asp["segmentos"], list):
+                    segs = [str(x).strip() for x in asp["segmentos"] if x]
+                else:
+                    # intentar por 'segmento' numérico -> mapear a nombres si existe campo mapping en asp
+                    val = str(asp.get("segmento") or "").strip()
+                    if val:
+                        segs = [val]
             else:
-                general_candidates.append(a)
+                val = getattr(asp, "segmentos", None)
+                if isinstance(val, list):
+                    segs = [str(x).strip() for x in val if x]
+                else:
+                    v2 = getattr(asp, "segmento", None)
+                    if v2 is not None:
+                        segs = [str(v2).strip()]
+            # normalizar: si no tiene membership devolvemos ['Población general']
+            if not segs:
+                return ["Población general"]
+            return segs
 
-        quota_candidates = sorted(quota_candidates, key=lambda x: self._get_score(x), reverse=True)
+        # Build a map: aspirante -> chosen_segment_name (the segment with lowest orden among those the aspirant belongs to)
+        segment_names_order = [s.nombre for s in segmentos]
+        aspirante_chosen_segment = {}
+        for a in postulados:
+            memberships = aspirante_segment_members(a)
+            # choose the segment with smallest index in segment_names_order that is in memberships
+            chosen = None
+            for s in segmentos:
+                if s.nombre in memberships or s.nombre.strip().lower() in [m.strip().lower() for m in memberships]:
+                    chosen = s.nombre
+                    break
+            if not chosen:
+                chosen = "Población general"
+            aspirante_chosen_segment[a if isinstance(a, dict) else id(a)] = chosen
 
-        general_p1 = [a for a in general_candidates if self._get_priority(a) == 1]
-        general_p2 = [a for a in general_candidates if self._get_priority(a) != 1]
+        # Prepare lists of candidates per segment
+        candidates_per_segment = {s.nombre: [] for s in segmentos}
+        for a in postulados:
+            chosen = aspirante_chosen_segment.get(a if isinstance(a, dict) else id(a))
+            if chosen not in candidates_per_segment:
+                # if chosen not defined in configured segments, send to Población general bucket
+                candidates_per_segment.setdefault("Población general", []).append(a)
+            else:
+                candidates_per_segment[chosen].append(a)
 
-        general_p1 = sorted(general_p1, key=lambda x: self._get_score(x), reverse=True)
-        general_p2 = sorted(general_p2, key=lambda x: self._get_score(x), reverse=True)
+        # Sort candidates in each segment by puntaje desc (deterministic)
+        for k in candidates_per_segment:
+            candidates_per_segment[k] = _stable_sort(candidates_per_segment[k], reverse=True)
 
-        quota_max = int(math.floor(total_slots * 0.10))
-        quota_min = int(math.ceil(total_slots * 0.05))
-
-        if len(quota_candidates) == 0:
-            quota_min = 0
-
-        # política conservadora: no reservar más que quota_max
-        if quota_min > quota_max:
-            quota_min = quota_max
-
-        reserved_quota = min(len(quota_candidates), quota_min)
         assigned = []
         idx = 0
 
-        def assign_list(app_list):
-            nonlocal idx, assigned
-            if idx >= len(cupos) or not app_list:
-                return
-            take = min(len(app_list), len(cupos) - idx)
-            if take <= 0:
-                return
-            sel = app_list[:take]
-            asignados_locales = _asignar_a_lista(cupos[idx:idx+take], sel, carrera)
-            assigned.extend(asignados_locales)
-            idx += take
+        # Iterate segments in order and fill their quotas
+        for i, s in enumerate(segmentos):
+            cuota = int(cuotas[i] if i < len(cuotas) else 0)
+            if cuota <= 0:
+                continue
+            pool = candidates_per_segment.get(s.nombre, [])
+            take = min(cuota, len(pool), len(cupos) - idx)
+            if take > 0:
+                sel = pool[:take]
+                assigned_local = _asignar_a_lista(cupos[idx:idx+take], sel, carrera)
+                assigned.extend(assigned_local)
+                idx += take
+            # if pool had fewer than cuota, remaining cups will be released to población general implicitly
 
-        # 1) Asignar a población general prioridad 1
-        assign_list(general_p1)
-
-        # 2) Asignar a población general prioridad 2
-        assign_list(general_p2)
-
-        # 3) Asignar reserved_quota de quota_candidates
-        remaining_cups = len(cupos) - idx
-        to_assign_reserved = min(reserved_quota, remaining_cups)
-        if to_assign_reserved > 0:
-            assign_list(quota_candidates[:to_assign_reserved])
-            quota_candidates = quota_candidates[to_assign_reserved:]
-
-        # 4) Permitir asignar cuota extra hasta quota_max
-        quota_assigned_count = 0
-        try:
+        # After processing segments, fill remaining slots with Población general (which includes freed cups)
+        remaining_slots = len(cupos) - idx
+        if remaining_slots > 0:
+            # build población general pool: candidates not yet assigned, plus those originally in Población general
+            already_assigned_set = set()
             for a in assigned:
-                seg = self._get_segment(a)
-                if seg == "2":
-                    quota_assigned_count += 1
-        except Exception:
-            quota_assigned_count = 0
+                # unify keyed by cedula or id
+                key = _get_cedula(a) or (id(a) if not isinstance(a, dict) else id(a))
+                already_assigned_set.add(key)
 
-        remaining_cups = len(cupos) - idx
-        extra_quota_allowed = max(0, quota_max - quota_assigned_count)
-        extra_to_assign = min(extra_quota_allowed, remaining_cups, len(quota_candidates))
-        if extra_to_assign > 0:
-            assign_list(quota_candidates[:extra_to_assign])
-            quota_candidates = quota_candidates[extra_to_assign:]
+            pop_pool = []
+            # candidates who were in 'Población general' bucket
+            pop_bucket = candidates_per_segment.get("Población general", [])
+            # plus candidates from other buckets who were not assigned (they will be available to general)
+            for k, pool in candidates_per_segment.items():
+                if k == "Población general":
+                    for a in pop_bucket:
+                        key = _get_cedula(a) or (id(a) if not isinstance(a, dict) else id(a))
+                        if key not in already_assigned_set:
+                            pop_pool.append(a)
+                else:
+                    for a in pool:
+                        key = _get_cedula(a) or (id(a) if not isinstance(a, dict) else id(a))
+                        if key not in already_assigned_set:
+                            pop_pool.append(a)
+
+            # orden stable por puntaje
+            pop_pool = _stable_sort(pop_pool, reverse=True)
+            take = min(remaining_slots, len(pop_pool))
+            if take > 0:
+                sel = pop_pool[:take]
+                assigned_local = _asignar_a_lista(cupos[idx:idx+take], sel, carrera)
+                assigned.extend(assigned_local)
+                idx += take
 
         return assigned
-
-
-# ------------------------
-# Clase wrapper que usa la estrategia
-# ------------------------
-class Asignacion_cupo:
-    """
-    Clase contenedora que recibe (carrera, aspirantes, estrategia) y ejecuta la asignación.
-    Uso:
-      contexto = Asignacion_cupo(carrera, aspirantes, SegmentQuotaStrategy())
-      asignados = contexto.asignar_cupos()
-    """
-
-    def __init__(self, carrera, aspirantes, strategy: AssignmentStrategy):
-        self.carrera = carrera
-        self.aspirantes = aspirantes
-        self.strategy = strategy
-        self.asignados = []
-
-    def asignar_cupos(self):
-        try:
-            self.asignados = self.strategy.assign(self.carrera, self.aspirantes) or []
-        except Exception:
-            self.asignados = []
-        return self.asignados
