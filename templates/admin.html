@@ -49,12 +49,8 @@
             </div>
 
             <div class="mb-3">
-              <label class="form-label">Estrategia de asignación por defecto</label>
-              <div class="input-group">
-                <select id="selectStrategy" class="form-select"></select>
-                <button id="btnSetStrategy" type="button" class="btn btn-outline-primary">Guardar estrategia</button>
-              </div>
-              <div class="form-text">Selecciona la estrategia que usará el sistema al asignar cupos.</div>
+              <button id="btnManageGlobalSegments" type="button" class="btn btn-outline-warning">Gestionar segmentos globales</button>
+              <div class="form-text">Los segmentos globales aplican a todas las carreras (suma debe ser 100%).</div>
             </div>
 
             <button id="btnUpload" type="button" class="btn btn-primary">Subir y cargar</button>
@@ -137,38 +133,39 @@
       </div>
     </div>
 
-    <!-- Modal gestionar segmentos -->
-    <div class="modal fade" id="modalSegmentos" tabindex="-1" aria-hidden="true">
+    <!-- Modal gestionar segmentos globales -->
+    <div class="modal fade" id="modalSegmentosGlobal" tabindex="-1" aria-hidden="true">
       <div class="modal-dialog modal-lg">
         <div class="modal-content">
           <div class="modal-header">
-            <h5 class="modal-title">Gestionar segmentos - <span id="segCarreraNombre"></span></h5>
+            <h5 class="modal-title">Segmentos globales (aplican a todas las carreras)</h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
           </div>
           <div class="modal-body">
-            <div id="segmentosList"></div>
+            <div id="segmentosGlobalList"></div>
             <hr>
             <h6>Añadir / Editar segmento</h6>
-            <form id="formSegmento">
+            <form id="formSegmentoGlobal">
               <div class="row g-2">
                 <div class="col-md-5">
-                  <input id="segNombre" class="form-control" placeholder="Nombre del segmento" required>
+                  <input id="gsegNombre" class="form-control" placeholder="Nombre del segmento" required>
                 </div>
                 <div class="col-md-3">
-                  <input id="segPorcentaje" type="number" min="0" max="100" step="0.1" class="form-control" placeholder="Porcentaje (%)" required>
+                  <input id="gsegPorcentaje" type="number" min="0" max="100" step="0.1" class="form-control" placeholder="Porcentaje (%)" required>
                 </div>
                 <div class="col-md-2">
-                  <input id="segOrden" type="number" min="1" class="form-control" placeholder="Orden" required>
+                  <input id="gsegOrden" type="number" min="1" class="form-control" placeholder="Orden" required>
                 </div>
                 <div class="col-md-2">
-                  <button id="btnAddSeg" class="btn btn-primary">Añadir/Actualizar</button>
+                  <button id="btnAddGSeg" class="btn btn-primary">Añadir/Actualizar</button>
                 </div>
               </div>
             </form>
-            <div id="segError" class="alert alert-danger mt-3 d-none"></div>
+            <div id="gsegError" class="alert alert-danger mt-3 d-none"></div>
+            <div class="form-text mt-2">La suma de porcentajes debe ser exactamente 100%</div>
           </div>
           <div class="modal-footer">
-            <button id="btnSaveSeg" type="button" class="btn btn-success">Guardar segmentos</button>
+            <button id="btnSaveGSeg" type="button" class="btn btn-success">Guardar segmentos globales</button>
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
           </div>
         </div>
@@ -190,25 +187,6 @@
         return data;
       }
 
-      // Load strategies into dropdown
-      async function loadStrategies() {
-        try {
-          const cfg = await api('/api/config/strategy', { method: 'GET' });
-          const sel = document.getElementById('selectStrategy');
-          sel.innerHTML = '';
-          const options = cfg.options || [];
-          options.forEach(o => {
-            const opt = document.createElement('option');
-            opt.value = o;
-            opt.textContent = o;
-            if (cfg.strategy === o) opt.selected = true;
-            sel.appendChild(opt);
-          });
-        } catch (e) {
-          console.warn('No se pudo cargar estrategias:', e.message);
-        }
-      }
-
       // Navegación de paneles
       document.getElementById('menuUpload')?.addEventListener('click', () => {
         document.getElementById('panelUpload').style.display = 'block';
@@ -228,20 +206,9 @@
         await cargarAspirantes();
       });
 
-      // Set default strategy
-      document.getElementById('btnSetStrategy')?.addEventListener('click', async () => {
-        const sel = document.getElementById('selectStrategy');
-        const strategy = sel.value;
-        try {
-          await api('/api/config/strategy', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ strategy })
-          });
-          alert('Estrategia guardada.');
-        } catch (e) {
-          alert('Error guardando estrategia: ' + e.message);
-        }
+      // Open global segments modal
+      document.getElementById('btnManageGlobalSegments')?.addEventListener('click', async () => {
+        abrirModalSegmentosGlobal();
       });
 
       // Upload
@@ -257,7 +224,6 @@
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || 'Error al subir');
           alert('Archivos subidos correctamente.');
-          await loadStrategies();
         } catch (e) {
           alert('Error: ' + e.message);
         }
@@ -285,7 +251,7 @@
         }
       });
 
-      // Cargar carreras y mostrarlas en la UI con botones
+      // Cargar carreras y mostrarlas en la UI con botones (sin botón de segmentos por carrera)
       async function cargarColegios() {
         try {
           const carreras = await api('/api/carreras', { method: 'GET' });
@@ -307,7 +273,6 @@
               <div>
                 <button class="btn btn-sm btn-outline-primary me-2 btn-ver-cupos" data-id="${c.id}" data-nombre="${c.nombre}" data-campus="${c.campus || ''}">Ver cupos</button>
                 <button class="btn btn-sm btn-outline-secondary me-2 btn-editar-cupos" data-id="${c.id}" data-nombre="${c.nombre}" data-oferta="${c.oferta_cupos}" data-campus="${c.campus || ''}">Editar cupos</button>
-                <button class="btn btn-sm btn-outline-warning me-2 btn-segmentos" data-id="${c.id}" data-nombre="${c.nombre}">Segmentos</button>
                 <button class="btn btn-sm btn-outline-danger btn-eliminar-cupos" data-id="${c.id}">Eliminar todos cupos</button>
               </div>
             `;
@@ -389,15 +354,6 @@
               } catch (e) {
                 alert('Error al obtener cupos: ' + e.message);
               }
-            });
-          });
-
-          // Segmentos button
-          document.querySelectorAll('.btn-segmentos').forEach(btn => {
-            btn.addEventListener('click', () => {
-              const id = btn.getAttribute('data-id');
-              const nombre = btn.getAttribute('data-nombre');
-              abrirModalSegmentos(id, nombre);
             });
           });
 
@@ -504,27 +460,27 @@
         }
       });
 
-      // Segmentos modal logic (functions reused from previous instructions)
-      let currentSegCarreraId = null;
-      const modalSeg = new bootstrap.Modal(document.getElementById('modalSegmentos'));
+      // -----------------------
+      // Segmentos globales modal logic
+      // -----------------------
+      let globalSegments = [];
+      let modalGSeg = new bootstrap.Modal(document.getElementById('modalSegmentosGlobal'));
 
-      async function abrirModalSegmentos(id, nombre) {
-        currentSegCarreraId = id;
-        document.getElementById('segCarreraNombre').textContent = nombre;
-        document.getElementById('segError').classList.add('d-none');
-        document.getElementById('segmentosList').innerHTML = '<p>Cargando...</p>';
+      async function abrirModalSegmentosGlobal() {
+        document.getElementById('gsegError').classList.add('d-none');
+        document.getElementById('segmentosGlobalList').innerHTML = '<p>Cargando...</p>';
         try {
-          const res = await api(`/api/carreras/${encodeURIComponent(id)}/segmentos`, { method: 'GET' });
-          const segs = res.segmentos || [];
-          renderSegmentosList(segs);
-          modalSeg.show();
+          const res = await api('/api/segmentos', { method: 'GET' });
+          globalSegments = res.segmentos || [];
+          renderSegmentosGlobalList(globalSegments);
+          modalGSeg.show();
         } catch (e) {
-          alert('Error al cargar segmentos: ' + e.message);
+          alert('Error al cargar segmentos globales: ' + e.message);
         }
       }
 
-      function renderSegmentosList(segs) {
-        const cont = document.getElementById('segmentosList');
+      function renderSegmentosGlobalList(segs) {
+        const cont = document.getElementById('segmentosGlobalList');
         if (!segs || segs.length === 0) {
           cont.innerHTML = '<p>No hay segmentos configurados.</p>';
           return;
@@ -536,30 +492,31 @@
             <td>${s.nombre}</td>
             <td>${s.porcentaje}</td>
             <td>
-              <button class="btn btn-sm btn-outline-secondary btn-edit-seg" data-json='${JSON.stringify(s).replace(/'/g,"&#39;")}'>Editar</button>
-              <button class="btn btn-sm btn-outline-danger btn-del-seg" data-nombre='${s.nombre}'>Eliminar</button>
+              <button class="btn btn-sm btn-outline-secondary btn-edit-gseg" data-json='${JSON.stringify(s).replace(/'/g,"&#39;")}'>Editar</button>
+              <button class="btn btn-sm btn-outline-danger btn-del-gseg" data-nombre='${s.nombre}'>Eliminar</button>
             </td>
           </tr>`;
         });
         html += '</tbody></table>';
         cont.innerHTML = html;
 
-        document.querySelectorAll('.btn-edit-seg').forEach(b => {
+        document.querySelectorAll('.btn-edit-gseg').forEach(b => {
           b.addEventListener('click', () => {
             const s = JSON.parse(b.getAttribute('data-json'));
-            document.getElementById('segNombre').value = s.nombre;
-            document.getElementById('segPorcentaje').value = s.porcentaje;
-            document.getElementById('segOrden').value = s.orden;
+            document.getElementById('gsegNombre').value = s.nombre;
+            document.getElementById('gsegPorcentaje').value = s.porcentaje;
+            document.getElementById('gsegOrden').value = s.orden;
           });
         });
-        document.querySelectorAll('.btn-del-seg').forEach(b => {
+        document.querySelectorAll('.btn-del-gseg').forEach(b => {
           b.addEventListener('click', async () => {
-            if (!confirm('¿Eliminar segmento?')) return;
+            if (!confirm('¿Eliminar segmento global?')) return;
             const nombre = b.getAttribute('data-nombre');
             try {
-              await api(`/api/carreras/${encodeURIComponent(currentSegCarreraId)}/segmentos/${encodeURIComponent(nombre)}`, { method: 'DELETE' });
-              const res = await api(`/api/carreras/${encodeURIComponent(currentSegCarreraId)}/segmentos`, { method: 'GET' });
-              renderSegmentosList(res.segmentos || []);
+              await api(`/api/segmentos/${encodeURIComponent(nombre)}`, { method: 'DELETE' });
+              const res = await api('/api/segmentos', { method: 'GET' });
+              globalSegments = res.segmentos || [];
+              renderSegmentosGlobalList(globalSegments);
             } catch (e) {
               alert('Error: ' + e.message);
             }
@@ -567,60 +524,54 @@
         });
       }
 
-      document.getElementById('formSegmento')?.addEventListener('submit', (ev) => {
+      document.getElementById('formSegmentoGlobal')?.addEventListener('submit', (ev) => {
         ev.preventDefault();
-        const nombre = document.getElementById('segNombre').value.trim();
-        const porcentaje = parseFloat(document.getElementById('segPorcentaje').value);
-        const orden = parseInt(document.getElementById('segOrden').value, 10) || 100;
+        const nombre = document.getElementById('gsegNombre').value.trim();
+        const porcentaje = parseFloat(document.getElementById('gsegPorcentaje').value);
+        const orden = parseInt(document.getElementById('gsegOrden').value, 10) || 100;
         if (!nombre || isNaN(porcentaje)) {
-          document.getElementById('segError').textContent = 'Datos inválidos';
-          document.getElementById('segError').classList.remove('d-none');
+          document.getElementById('gsegError').textContent = 'Datos inválidos';
+          document.getElementById('gsegError').classList.remove('d-none');
           return;
         }
-        (async () => {
-          try {
-            await api(`/api/carreras/${encodeURIComponent(currentSegCarreraId)}/segmentos`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ nombre, porcentaje, orden })
-            });
-            const res = await api(`/api/carreras/${encodeURIComponent(currentSegCarreraId)}/segmentos`, { method: 'GET' });
-            renderSegmentosList(res.segmentos || []);
-            document.getElementById('segNombre').value = '';
-            document.getElementById('segPorcentaje').value = '';
-            document.getElementById('segOrden').value = '';
-            document.getElementById('segError').classList.add('d-none');
-          } catch (e) {
-            document.getElementById('segError').textContent = e.message;
-            document.getElementById('segError').classList.remove('d-none');
-          }
-        })();
+        // client-side update: if exists replace, else push
+        const idx = globalSegments.findIndex(s => s.nombre.trim().toLowerCase() === nombre.toLowerCase());
+        if (idx >= 0) {
+          globalSegments[idx].porcentaje = porcentaje;
+          globalSegments[idx].orden = orden;
+        } else {
+          globalSegments.push({ nombre, porcentaje, orden });
+        }
+        renderSegmentosGlobalList(globalSegments);
+        // clear form
+        document.getElementById('gsegNombre').value = '';
+        document.getElementById('gsegPorcentaje').value = '';
+        document.getElementById('gsegOrden').value = '';
+        document.getElementById('gsegError').classList.add('d-none');
       });
 
-      document.getElementById('btnSaveSeg')?.addEventListener('click', async () => {
+      document.getElementById('btnSaveGSeg')?.addEventListener('click', async () => {
         try {
-          const rows = Array.from(document.querySelectorAll('#segmentosList table tbody tr'));
-          const segmentos = rows.map(r => {
-            const cols = r.querySelectorAll('td');
-            return { orden: parseInt(cols[0].textContent.trim()), nombre: cols[1].textContent.trim(), porcentaje: parseFloat(cols[2].textContent.trim()) };
-          });
-          const suma = segmentos.reduce((s, x) => s + (parseFloat(x.porcentaje) || 0), 0);
+          // validate sum == 100
+          const suma = globalSegments.reduce((s, x) => s + (parseFloat(x.porcentaje) || 0), 0);
           if (Math.abs(suma - 100.0) > 0.0001) {
             alert('La suma de porcentajes debe ser 100. Actualmente: ' + suma);
             return;
           }
-          await api(`/api/carreras/${encodeURIComponent(currentSegCarreraId)}/segmentos`, { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ segmentos }) });
-          modalSeg.hide();
-          await cargarColegios();
-          alert('Segmentos guardados.');
+          await api('/api/segmentos', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ segmentos: globalSegments })
+          });
+          modalGSeg.hide();
+          alert('Segmentos globales guardados.');
         } catch (e) {
-          alert('Error al guardar segmentos: ' + e.message);
+          alert('Error al guardar segmentos globales: ' + e.message);
         }
       });
 
-      // Arranque: seleccionar panel upload por defecto y cargar estrategias
+      // Arranque: seleccionar panel upload por defecto
       document.getElementById('menuUpload').click();
-      loadStrategies();
     </script>
   </body>
 </html>

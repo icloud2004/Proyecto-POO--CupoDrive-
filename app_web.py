@@ -1,4 +1,4 @@
-# app_web.py (modificado: soporte de estrategias seleccionables y endpoints de segmentos)
+# app_web.py (modificado: soporte de segmentos GLOBALES en lugar de segmentos por carrera en UI)
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, abort
 import os
 import traceback
@@ -39,12 +39,7 @@ try:
 except Exception:
     Universidad = None
 
-try:
-    from Admin import Administrador
-except Exception:
-    Administrador = None
-
-# Importar estrategias (varias variantes de nombre)
+# Importar estrategias (la asignación seguirá usando Strategy; MultiSegmentStrategy usará los segmentos globales)
 try:
     from Asignación_cupos import Asignacion_cupo, MultiSegmentStrategy, SegmentQuotaStrategy, MeritStrategy, LotteryStrategy
 except Exception:
@@ -59,7 +54,7 @@ except Exception:
 
 # Persistencia helpers (intentar importar)
 try:
-    from persistencia import save_aspirantes, load_aspirantes, save_cupos, load_cupos, save_segmentos, load_segmentos
+    from persistencia import save_aspirantes, load_aspirantes, save_cupos, load_cupos
 except Exception:
     # shims básicos
     def save_aspirantes(*args, **kwargs):
@@ -70,60 +65,24 @@ except Exception:
         pass
     def load_cupos(*args, **kwargs):
         return []
-    def save_segmentos(*args, **kwargs):
-        pass
-    def load_segmentos(*args, **kwargs):
-        return []
 
 app = Flask(__name__)
 app.template_folder = os.path.join(os.path.dirname(__file__), "templates")
 app.secret_key = os.environ.get("CUPODRIVE_SECRET", "dev-secret-key")
 
 # ---------------------------
-# Estado en memoria
+# Estado en memoria & paths
 # ---------------------------
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 os.makedirs(DATA_DIR, exist_ok=True)
-CONFIG_PATH = os.path.join(DATA_DIR, "config.json")
+GLOBAL_SEGMENTOS_PATH = os.path.join(DATA_DIR, "segmentos_global.json")
 
 carreras_list = []       # lista de instancias Carrera
 aspirantes_list = []     # lista de instancias Aspirante o dicts
 uni_global = None
 repo = None
-
-# Default strategy (persistido en data/config.json)
-DEFAULT_STRATEGY_NAME = "multi_segment"
-def load_config():
-    global DEFAULT_STRATEGY_NAME
-    try:
-        if os.path.exists(CONFIG_PATH):
-            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-                cfg = json.load(f)
-                DEFAULT_STRATEGY_NAME = cfg.get("strategy", DEFAULT_STRATEGY_NAME)
-    except Exception:
-        pass
-
-def save_config():
-    try:
-        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-            json.dump({"strategy": DEFAULT_STRATEGY_NAME}, f, ensure_ascii=False, indent=2)
-    except Exception:
-        pass
-
-load_config()
-
-# Mapping of available strategies (strings -> classes)
-STRATEGIES = {}
-if MultiSegmentStrategy is not None:
-    STRATEGIES["multi_segment"] = MultiSegmentStrategy
-if SegmentQuotaStrategy is not None:
-    STRATEGIES["segment_quota"] = SegmentQuotaStrategy
-if MeritStrategy is not None:
-    STRATEGIES["merit"] = MeritStrategy
-if LotteryStrategy is not None:
-    STRATEGIES["lottery"] = LotteryStrategy
 
 def ensure_repo():
     global repo
@@ -272,12 +231,6 @@ def admin_upload():
         except Exception as e:
             return jsonify({"error": f"Error cargando carreras: {e}"}), 500
 
-        # persist segmentos if any present in carreras_list
-        try:
-            save_segmentos(carreras_list)
-        except Exception:
-            pass
-
         try:
             repo = RepositorioCupos(carreras_list_ref=carreras_list)
             try:
@@ -300,14 +253,21 @@ def admin_assign_all():
     if Asignacion_cupo is None:
         return jsonify({"error": "Módulo de asignación no disponible"}), 500
 
-    resultados = {}
-    # select strategy class from default (persisted)
-    strategy_name = DEFAULT_STRATEGY_NAME
-    StrategyClass = STRATEGIES.get(strategy_name)
-    if StrategyClass is None:
-        # fallback to MultiSegmentStrategy if available
-        StrategyClass = MultiSegmentStrategy or SegmentQuotaStrategy or MeritStrategy
+    # Cargar segmentos globales y asignarlos a cada carrera antes de ejecutar la estrategia
+    global_segments = load_global_segmentos()  # lista de dicts
+    # si hay segmentos globales, aplicarlos a cada carrera (reconstruir Segmento objects)
+    if global_segments:
+        try:
+            from Segmento import Segmento
+            seg_objs = [Segmento.from_dict(s) for s in global_segments]
+            for c in carreras_list:
+                c.segmentos = seg_objs.copy()
+        except Exception:
+            pass
 
+    resultados = {}
+    # usar MultiSegmentStrategy por defecto (si está disponible) para respetar múltiples segmentos
+    StrategyClass = MultiSegmentStrategy or SegmentQuotaStrategy or MeritStrategy
     for carrera in carreras_list:
         try:
             contexto = Asignacion_cupo(carrera, aspirantes_list, StrategyClass())
@@ -426,23 +386,34 @@ def api_aspirantes():
     return jsonify(out)
 
 # ---------------------------
-# Endpoints de segmentos (GET/POST/PUT/DELETE)
+# Endpoints para segmentos GLOBALES
 # ---------------------------
-from Segmento import Segmento
+def load_global_segmentos():
+    try:
+        if os.path.exists(GLOBAL_SEGMENTOS_PATH):
+            with open(GLOBAL_SEGMENTOS_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return data or []
+    except Exception:
+        traceback.print_exc()
+    return []
 
-@app.route("/api/carreras/<carrera_id>/segmentos", methods=["GET"])
-@login_required(role="admin")
-def api_get_segmentos(carrera_id):
-    for c in carreras_list:
-        cid = getattr(c, "id_carrera", "") or getattr(c, "nombre", "")
-        if str(cid) == str(carrera_id) or getattr(c, "nombre", "") == carrera_id:
-            segs = c.get_segmentos_dict() if hasattr(c, "get_segmentos_dict") else []
-            return jsonify({"ok": True, "segmentos": segs})
-    return jsonify({"error": "Carrera no encontrada"}), 404
+def save_global_segmentos(seg_list):
+    try:
+        with open(GLOBAL_SEGMENTOS_PATH, "w", encoding="utf-8") as f:
+            json.dump(seg_list, f, ensure_ascii=False, indent=2)
+    except Exception:
+        traceback.print_exc()
 
-@app.route("/api/carreras/<carrera_id>/segmentos", methods=["POST"])
+@app.route("/api/segmentos", methods=["GET"])
 @login_required(role="admin")
-def api_set_segmentos(carrera_id):
+def api_get_global_segmentos():
+    segs = load_global_segmentos()
+    return jsonify({"ok": True, "segmentos": segs})
+
+@app.route("/api/segmentos", methods=["POST"])
+@login_required(role="admin")
+def api_set_global_segmentos():
     payload = request.get_json() or {}
     segmentos_payload = payload.get("segmentos", [])
     if not isinstance(segmentos_payload, list):
@@ -450,77 +421,29 @@ def api_set_segmentos(carrera_id):
     suma = sum([float(s.get("porcentaje", 0) or 0) for s in segmentos_payload])
     if abs(suma - 100.0) > 0.0001:
         return jsonify({"error": f"La suma de porcentajes debe ser 100. Actualmente: {suma}"}), 400
-    for c in carreras_list:
-        cid = getattr(c, "id_carrera", "") or getattr(c, "nombre", "")
-        if str(cid) == str(carrera_id) or getattr(c, "nombre", "") == carrera_id:
-            new_segments = []
-            for s in segmentos_payload:
-                seg = Segmento.from_dict(s)
-                new_segments.append(seg)
-            c.segmentos = new_segments
-            try:
-                save_segmentos(carreras_list)
-            except Exception:
-                pass
-            return jsonify({"ok": True, "segmentos": [x.to_dict() for x in new_segments]})
-    return jsonify({"error": "Carrera no encontrada"}), 404
+    # normalize and persist
+    normalized = []
+    for s in segmentos_payload:
+        normalized.append({
+            "nombre": str(s.get("nombre","")).strip(),
+            "porcentaje": float(s.get("porcentaje", 0) or 0),
+            "orden": int(s.get("orden", 100) or 100),
+            "min_pct": s.get("min_pct", None),
+            "max_pct": s.get("max_pct", None),
+            "descripcion": s.get("descripcion", "")
+        })
+    save_global_segmentos(normalized)
+    return jsonify({"ok": True, "segmentos": normalized})
 
-@app.route("/api/carreras/<carrera_id>/segmentos", methods=["PUT"])
+@app.route("/api/segmentos/<segmento_nombre>", methods=["DELETE"])
 @login_required(role="admin")
-def api_update_segmento(carrera_id):
-    payload = request.get_json() or {}
-    nombre = payload.get("nombre")
-    if not nombre:
-        return jsonify({"error": "Falta nombre del segmento"}), 400
-    for c in carreras_list:
-        cid = getattr(c, "id_carrera", "") or getattr(c, "nombre", "")
-        if str(cid) == str(carrera_id) or getattr(c, "nombre", "") == carrera_id:
-            updated = c.actualizar_segmento(nombre, porcentaje=payload.get("porcentaje"), orden=payload.get("orden"), min_pct=payload.get("min_pct"), max_pct=payload.get("max_pct"), descripcion=payload.get("descripcion"))
-            if not updated:
-                seg = Segmento.from_dict(payload)
-                c.agregar_segmento(seg)
-            try:
-                save_segmentos(carreras_list)
-            except Exception:
-                pass
-            return jsonify({"ok": True, "segmentos": c.get_segmentos_dict()})
-    return jsonify({"error": "Carrera no encontrada"}), 404
-
-@app.route("/api/carreras/<carrera_id>/segmentos/<segmento_nombre>", methods=["DELETE"])
-@login_required(role="admin")
-def api_delete_segmento(carrera_id, segmento_nombre):
-    for c in carreras_list:
-        cid = getattr(c, "id_carrera", "") or getattr(c, "nombre", "")
-        if str(cid) == str(carrera_id) or getattr(c, "nombre", "") == carrera_id:
-            removed = c.eliminar_segmento(segmento_nombre)
-            try:
-                save_segmentos(carreras_list)
-            except Exception:
-                pass
-            if removed:
-                return jsonify({"ok": True})
-            return jsonify({"error": "Segmento no encontrado"}), 404
-    return jsonify({"error": "Carrera no encontrada"}), 404
-
-# ---------------------------
-# Config endpoints (strategy)
-# ---------------------------
-@app.route("/api/config/strategy", methods=["GET"])
-@login_required(role="admin")
-def api_get_strategy():
-    return jsonify({"strategy": DEFAULT_STRATEGY_NAME, "options": list(STRATEGIES.keys())})
-
-@app.route("/api/config/strategy", methods=["POST"])
-@login_required(role="admin")
-def api_set_strategy():
-    global DEFAULT_STRATEGY_NAME
-    payload = request.get_json() or {}
-    strategy = payload.get("strategy")
-    if not strategy or strategy not in STRATEGIES:
-        return jsonify({"error": "Strategy inválida"}), 400
-    DEFAULT_STRATEGY_NAME = strategy
-    save_config()
-    return jsonify({"ok": True, "strategy": DEFAULT_STRATEGY_NAME})
+def api_delete_global_segmento(segmento_nombre):
+    segs = load_global_segmentos()
+    new = [s for s in segs if str(s.get("nombre","")).strip().lower() != str(segmento_nombre).strip().lower()]
+    if len(new) == len(segs):
+        return jsonify({"error": "Segmento no encontrado"}), 404
+    save_global_segmentos(new)
+    return jsonify({"ok": True})
 
 # ---------------------------
 # Inicialización segura (carga predeterminada)
@@ -573,7 +496,7 @@ def load_default_data():
         except Exception as e:
             print("Advertencia: no se pudieron cargar los aspirantes desde CSV.", e)
 
-    # CARGA DE CARRERAS Y RECONSTRUCCIÓN DE CUPOS (respeta data/cupos.json y data/segmentos.json si existen)
+    # CARGA DE CARRERAS Y RECONSTRUCCIÓN DE CUPOS (respeta data/cupos.json)
     if os.path.exists("Carreras.csv") and CargarCarreras:
         try:
             carreras_list_local = CargarCarreras("Carreras.csv").cargar(as_model=True)
@@ -595,21 +518,7 @@ def load_default_data():
 
             # cargar cupos persistidos si existe
             cupos_file_path = os.path.join(os.path.dirname(__file__), "data", "cupos.json")
-            segment_file_path = os.path.join(os.path.dirname(__file__), "data", "segmentos.json")
             cupos_exist_file = os.path.exists(cupos_file_path)
-            # aplicar segmentos si existen
-            if os.path.exists(segment_file_path):
-                try:
-                    segs_data = load_segmentos()
-                    # segs_data: [ {id_carrera, segmentos: [{...}]}, ... ]
-                    for rec in segs_data:
-                        cid = rec.get("id_carrera")
-                        segs = rec.get("segmentos", [])
-                        for c in carreras_list:
-                            if str(getattr(c, "id_carrera", "") or getattr(c, "nombre","")) == str(cid):
-                                c.segmentos = [ Segmento.from_dict(s) for s in segs ]
-                except Exception:
-                    pass
 
             if cupos_exist_file:
                 persisted = load_cupos()
