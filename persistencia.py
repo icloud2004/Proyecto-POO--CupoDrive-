@@ -53,8 +53,28 @@ def serialize_aspirante(a) -> dict:
 def serialize_aspirantes_list(aspirantes_list: List) -> List[dict]:
     return [serialize_aspirante(a) for a in aspirantes_list]
 
-def save_aspirantes(aspirantes_list: List, path: str = ASPIRANTES_PATH) -> None:
+def save_aspirantes(aspirantes_list: List, path: str = ASPIRANTES_PATH, dedupe: bool = True) -> None:
+    """
+    Guarda la lista de aspirantes en JSON. Por defecto elimina duplicados por 'cedula'
+    para evitar acumular repetidos si la lista contiene entradas repetidas.
+    """
     data = serialize_aspirantes_list(aspirantes_list)
+
+    if dedupe:
+        seen = set()
+        deduped = []
+        for a in data:
+            ced = str((a or {}).get("cedula", "")).strip()
+            if ced == "":
+                # si no hay cédula, lo incluimos igual (o podrías ignorarlo)
+                deduped.append(a)
+                continue
+            if ced in seen:
+                continue
+            seen.add(ced)
+            deduped.append(a)
+        data = deduped
+
     _save_json_atomic(path, data)
 
 def load_aspirantes(path: str = ASPIRANTES_PATH) -> List[dict]:

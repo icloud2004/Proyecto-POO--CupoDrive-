@@ -1,6 +1,6 @@
 import csv
 from Aspirante import Aspirante
-#PATRON SINGLETON
+
 class Cargar_datos:
     # Esta variable guardará la única instancia de la clase
     _instancia_unica = None
@@ -27,6 +27,16 @@ class Cargar_datos:
                 lector = csv.reader(data, delimiter=";")
                 next(lector)  # Saltamos encabezado
 
+                # construir conjunto de cédulas ya presentes para evitar duplicados
+                existing_ceds = set()
+                for ex in self.aspirantes:
+                    try:
+                        ex_ced = getattr(ex, "cedula", None) if not isinstance(ex, dict) else (ex.get("identificiacion") or ex.get("identificacion") or ex.get("cedula"))
+                        if ex_ced:
+                            existing_ceds.add(str(ex_ced).strip())
+                    except Exception:
+                        continue
+
                 for fila in lector:
                     (
                         ies_id, ies_nombre, identificacion, nombres, apellidos,
@@ -35,14 +45,24 @@ class Cargar_datos:
                         acepta_estado, fecha_acepta_cupo
                     ) = fila
 
+                    cedula_from_row = str(identificacion).strip()
+                    if cedula_from_row in existing_ceds:
+                        # saltar duplicado del CSV respecto a lo ya cargado
+                        continue
+                    # validar valores básicos
+                    try:
+                        puntaje_val = float(puntaje_postulacion)
+                    except Exception:
+                        puntaje_val = 0.0
+
                     aspirante = Aspirante(
                         cedula=identificacion,
                         nombre=f"{nombres} {apellidos}",
-                        puntaje=float(puntaje_postulacion),
+                        puntaje=puntaje_val,
                         grupo=segmento,
                         titulos="Bachiller",
                         estado="Postulado",
-                        vulnerabilidad="Alta" if int(segmento) == 1 else "Media",
+                        vulnerabilidad="Alta" if str(segmento).strip() == "1" else "Media",
                         fecha_inscripcion="2025-01-10"
                     )
 
@@ -60,11 +80,12 @@ class Cargar_datos:
 
                     # Guardar puntaje_postulacion también como atributo si lo necesitas explícitamente
                     try:
-                        setattr(aspirante, "puntaje_postulacion", float(puntaje_postulacion))
+                        setattr(aspirante, "puntaje_postulacion", puntaje_val)
                     except Exception:
                         pass
 
                     self.aspirantes.append(aspirante)
+                    existing_ceds.add(cedula_from_row)
 
             self.ya_cargo = True # Marcamos que ya terminó
             print(f"Éxito: {len(self.aspirantes)} aspirantes listos.")
