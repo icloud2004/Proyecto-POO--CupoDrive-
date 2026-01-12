@@ -26,5 +26,26 @@
     "carrera": "Tecnologías de la información",
     "nuevo_estado": "Eliminado",
     "fecha": "2026-01-11 17:03:09"
+  },
+  {
+    "tipo": "cupo",
+    "cupo": "349360-1",
+    "carrera": "Software",
+    "nuevo_estado": "Aceptado",
+    "fecha": "2026-01-11 17:43:32"
+  },
+  {
+    "tipo": "cupo",
+    "cupo": "349360-35",
+    "carrera": "Software",
+    "nuevo_estado": "Aceptado",
+    "fecha": "2026-01-11 18:03:30"
+  },
+  {
+    "tipo": "cupo",
+    "cupo": "349360-35",
+    "carrera": "Software",
+    "nuevo_estado": "Disponible",
+    "fecha": "2026-01-11 18:03:54"
   }
 ]
