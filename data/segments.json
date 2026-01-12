@@ -1,0 +1,12 @@
+{
+  "default_segments": [
+    {"nombre": "Política de cuotas", "porcentaje": 7.5, "min_pct": 5, "max_pct": 10},
+    {"nombre": "Grupo de mayor vulnerabilidad socioeconómica", "porcentaje": 10, "min_pct": 10, "max_pct": 100},
+    {"nombre": "Mérito Académico", "porcentaje": 20, "min_pct": 20, "max_pct": 100},
+    {"nombre": "Otros Reconocimientos al Mérito", "porcentaje": 0, "min_pct": 0, "max_pct": 2},
+    {"nombre": "Bachilleres pueblos", "porcentaje": 5, "min_pct": 5, "max_pct": 10},
+    {"nombre": "Bachilleres", "porcentaje": 25, "min_pct": 20, "max_pct": 100},
+    {"nombre": "Población general", "porcentaje": 32.5, "min_pct": 20, "max_pct": 100}
+  ],
+  "by_carrera": {}
+}

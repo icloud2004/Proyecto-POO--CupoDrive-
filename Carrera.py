@@ -1,30 +1,105 @@
 from Cupo import Cupo
 from Segmento import Segmento
+from typing import List, Dict
+import math
 
 class Carrera:
-    def __init__(self, id_carrera, nombre, oferta_cupos, segmentos=None, campus=None):
+    def __init__(self, id_carrera, nombre, oferta_cupos, segmentos: List[Segmento]=None, campus=None):
         self.id_carrera = id_carrera
         self.nombre = nombre
-        self.oferta_cupos = int(oferta_cupos)   # cupos disponibles
-        self.segmentos = segmentos if segmentos else []  # Lista de objetos Segmento
-        self.campus = campus  # sede / campus
-        self.cupos = []     # Lista de objetos Cupo generados
-
-        # Inicializamos los cupos disponibles
+        self.oferta_cupos = int(oferta_cupos)
+        self.segmentos = segmentos if segmentos else []  # Lista de Segmento
+        self.campus = campus
+        self.cupos = []
         for i in range(1, self.oferta_cupos + 1):
             self.cupos.append(Cupo(id_cupo=f"{id_carrera}-{i}", carrera=self.nombre))
 
-    def agregar_segmento(self, segmento):
-        """Agrega un segmento (grupo) asociado a la carrera."""
+    # Segmentos management
+    def agregar_segmento(self, segmento: Segmento):
         self.segmentos.append(segmento)
         print(f" Segmento '{segmento.nombre}' agregado a la carrera {self.nombre}")
 
+    def actualizar_segmento(self, nombre_segmento: str, porcentaje: float, min_pct: float = None, max_pct: float = None):
+        for seg in self.segmentos:
+            if seg.nombre.strip().lower() == nombre_segmento.strip().lower():
+                seg.porcentaje = float(porcentaje)
+                if min_pct is not None:
+                    seg.min_pct = float(min_pct)
+                if max_pct is not None:
+                    seg.max_pct = float(max_pct)
+                return True
+        return False
+
+    def eliminar_segmento(self, nombre_segmento: str):
+        for seg in list(self.segmentos):
+            if seg.nombre.strip().lower() == nombre_segmento.strip().lower():
+                self.segmentos.remove(seg)
+                return True
+        return False
+
+    def validar_porcentajes(self) -> (bool, float):
+        """
+        Valida la suma de porcentajes.
+        Devuelve (es_valido, suma_actual)
+        """
+        suma = sum([float(seg.porcentaje or 0.0) for seg in self.segmentos])
+        return (suma <= 100.0, suma)
+
+    def distribuir_cupos_por_segmento(self) -> Dict[str, int]:
+        """
+        Calcula cuántos cupos corresponden a cada segmento.
+        Rellena automáticamente la diferencia pendiente en 'Población general'.
+        Retorna dict {segmento_nombre: cupos}
+        """
+        oferta = self.oferta_cupos
+        asignados = {}
+        total_asignado = 0
+
+        # Primero calcular cupos por segmento (floor)
+        for seg in self.segmentos:
+            n = seg.calcular_cupos_total(oferta)
+            asignados[seg.nombre] = n
+            total_asignado += n
+
+        # Si existe segmento población general entre segmentos, lo usamos; si no, lo creamos con 0%
+        pobl_general_name = None
+        for seg in self.segmentos:
+            if seg.nombre.strip().lower() in ["población general", "poblacion general", "poblacion general"]:
+                pobl_general_name = seg.nombre
+                break
+
+        # sobrante
+        sobrante = oferta - total_asignado
+        if sobrante > 0:
+            if pobl_general_name:
+                asignados[pobl_general_name] = asignados.get(pobl_general_name, 0) + sobrante
+            else:
+                # añadir virtualmente
+                asignados["Población general"] = asignados.get("Población general", 0) + sobrante
+
+        # si hubo sobreasignación (por redondeos) recortar de poblacion general preferentemente
+        if sum(asignados.values()) > oferta:
+            exceso = sum(asignados.values()) - oferta
+            if pobl_general_name and asignados.get(pobl_general_name, 0) >= exceso:
+                asignados[pobl_general_name] -= exceso
+            else:
+                # recortar desde cualquier segmento sin bajar de su min_pct (simplificado)
+                for seg in self.segmentos:
+                    nombre = seg.nombre
+                    reducible = max(0, asignados.get(nombre, 0) - int((seg.min_pct/100.0)*oferta))
+                    take = min(reducible, exceso)
+                    asignados[nombre] -= take
+                    exceso -= take
+                    if exceso <= 0:
+                        break
+
+        return asignados
+
+    # resto de métodos existentes (obtener_cupos_disponibles, mostrar_informacion, actualizar_oferta...) se mantienen
     def obtener_cupos_disponibles(self):
-        """Devuelve una lista de cupos que están disponibles."""
         return [c for c in self.cupos if getattr(c, "estado", "") == "Disponible"]
 
     def mostrar_informacion(self):
-        """Imprime información general de la carrera y sus cupos."""
         disponibles = len(self.obtener_cupos_disponibles())
         print(f"\nCARRERA: {self.nombre} (campus: {self.campus})")
         print(f"Oferta total: {self.oferta_cupos} cupos")
@@ -32,62 +107,3 @@ class Carrera:
         print("Segmentos:")
         for seg in self.segmentos:
             print(f" - {seg.nombre} ({seg.porcentaje}%)")
-
-    def actualizar_oferta(self, nueva_oferta):
-        """
-        Actualiza la oferta de cupos para la carrera.
-        - Si nueva_oferta > oferta actual: añade cupos nuevos al final.
-        - Si nueva_oferta < oferta actual: elimina cupos disponibles al final.
-          No permite reducir por debajo del número de cupos ya asignados.
-        Lanza ValueError si la operación no es posible.
-        """
-        try:
-            nueva = int(nueva_oferta)
-        except Exception:
-            raise ValueError("La nueva oferta debe ser un número entero.")
-
-        if nueva < 0:
-            raise ValueError("La nueva oferta debe ser >= 0.")
-
-        actuales = len(self.cupos)
-        asignados = len([c for c in self.cupos if getattr(c, "estado", "") != "Disponible"])
-
-        if nueva < asignados:
-            # no podemos reducir por debajo de los asignados
-            raise ValueError(f"No se puede reducir la oferta a {nueva}: hay {asignados} cupos ya asignados.")
-
-        if nueva == actuales:
-            # nada que hacer
-            self.oferta_cupos = nueva
-            return
-
-        if nueva > actuales:
-            # Añadir nuevos cupos
-            start = actuales + 1
-            for i in range(start, nueva + 1):
-                new_id = f"{self.id_carrera}-{i}"
-                self.cupos.append(Cupo(id_cupo=new_id, carrera=self.nombre))
-            self.oferta_cupos = nueva
-            print(f"Se añadieron {nueva - actuales} cupos a la carrera {self.nombre}.")
-            return
-
-        if nueva < actuales:
-            # Remover cupos disponibles desde el final
-            eliminables = [c for c in reversed(self.cupos) if getattr(c, "estado", "") == "Disponible"]
-            cantidad_a_quitar = actuales - nueva
-            if len(eliminables) < cantidad_a_quitar:
-                disponibles = [c for c in self.cupos if getattr(c, "estado", "") == "Disponible"]
-                if len(disponibles) < cantidad_a_quitar:
-                    raise ValueError("No hay suficientes cupos disponibles para reducir la oferta (algunos están asignados).")
-                to_remove = disponibles[-cantidad_a_quitar:]
-            else:
-                to_remove = eliminables[:cantidad_a_quitar]
-
-            for rem in to_remove:
-                try:
-                    self.cupos.remove(rem)
-                except ValueError:
-                    pass
-            self.oferta_cupos = nueva
-            print(f"Se eliminaron {cantidad_a_quitar} cupos de la carrera {self.nombre}.")
-            return

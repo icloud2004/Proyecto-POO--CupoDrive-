@@ -1,13 +1,13 @@
 from Cargar_datos import Cargar_datos
 from Carrera import Carrera
-from Asignación_cupos import Asignacion_cupo
+from Asignacion_cupos import Asignacion_cupo
 from Admin import Administrador
 from Aceptacion_cupo import Aceptacion_cupo
 from Certificado_aceptacion import Certificado_aceptacion
 from Repositoriocupos import RepositorioCupos
 from Segmento import Segmento
 from Universidad import Universidad
-from Periodo_acádemico import Periodo_academico
+from Periodo_academico import Periodo_academico
 
 
 #EL MAIN LO BASAMOS RESPECTO A LA BASE DE DATOS CSV QUE TENEMOS EN NUESTRO REPOSITORIO.
@@ -16,7 +16,6 @@ def main():
     
     print("  SISTEMA AUTOMATIZADO DE ASIGNACIÓN DE CUPOS (CUPODRIVE)")
  
-
     datos = Cargar_datos("BaseDatos.csv").cargar()
 
     #Crear universidad y periodo académico
@@ -83,5 +82,6 @@ def main():
 
     print("\n Proceso SAC completado correctamente.\n")
 
-if __name__ == "__main__":
-    main()
+
+
+
