@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Admin - CupoDrive</title>
+    <title>CupoDrive - Admin</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
       body { min-height: 100vh; }
@@ -68,204 +68,272 @@
             <tbody><tr><td colspan="4">Carga los aspirantes para ver la lista.</td></tr></tbody>
           </table>
         </div>
-
       </div>
     </div>
 
+    <!-- Modal editar cupos -->
+    <div class="modal fade" id="modalEditarCupos" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Editar cantidad de cupos</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+          </div>
+          <div class="modal-body">
+            <form id="formEditarCupos">
+              <div class="mb-3">
+                <label class="form-label">Carrera</label>
+                <input id="editCarreraNombre" type="text" class="form-control" readonly>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Cupos actuales</label>
+                <input id="editCuposActuales" type="number" class="form-control" readonly>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Nueva cantidad de cupos</label>
+                <input id="editNuevaOferta" type="number" min="0" class="form-control" required>
+              </div>
+              <div id="editError" class="alert alert-danger d-none"></div>
+            </form>
+          </div>
+          <div class="modal-footer">
+            <button id="btnGuardarCupos" type="button" class="btn btn-primary">Guardar</button>
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-      async function api(path, opts) {
-        const res = await fetch(path, opts);
+      // helper fetch que incluye cookies
+      async function api(path, opts = {}) {
+        const fetchOpts = Object.assign({ credentials: 'include' }, opts);
+        const res = await fetch(path, fetchOpts);
+        const text = await res.text();
+        let data = null;
+        try { data = text ? JSON.parse(text) : null; } catch (e) { data = null; }
         if (!res.ok) {
-          const txt = await res.text();
-          throw new Error(txt || res.statusText);
+          throw new Error((data && data.error) ? data.error : (text || res.statusText));
         }
-        return res.json();
+        return data;
       }
 
-      // Logout
-      document.getElementById('logoutBtn')?.addEventListener('click', async () => {
-        await api('/logout', {method: 'POST'});
-        window.location = '/';
-      });
-
-      // Menu handlers
-      document.getElementById('menuUpload').addEventListener('click', () => {
+      // Navegación de paneles
+      document.getElementById('menuUpload')?.addEventListener('click', () => {
         document.getElementById('panelUpload').style.display = 'block';
         document.getElementById('panelCupos').style.display = 'none';
         document.getElementById('panelAspirantes').style.display = 'none';
       });
-      document.getElementById('menuCupos').addEventListener('click', () => {
+      document.getElementById('menuCupos')?.addEventListener('click', async () => {
         document.getElementById('panelUpload').style.display = 'none';
         document.getElementById('panelCupos').style.display = 'block';
         document.getElementById('panelAspirantes').style.display = 'none';
-        loadCarreras();
+        await cargarColegios();
       });
-      document.getElementById('menuAspirantes').addEventListener('click', () => {
+      document.getElementById('menuAspirantes')?.addEventListener('click', async () => {
         document.getElementById('panelUpload').style.display = 'none';
         document.getElementById('panelCupos').style.display = 'none';
         document.getElementById('panelAspirantes').style.display = 'block';
-        loadAspirantes();
+        await cargarAspirantes();
       });
 
-      // Upload files
-      document.getElementById('btnUpload').addEventListener('click', async () => {
-        const form = new FormData();
+      // Upload
+      document.getElementById('btnUpload')?.addEventListener('click', async () => {
+        const form = document.getElementById('uploadForm');
+        const fd = new FormData();
         const fAsp = document.getElementById('fileAspirantes').files[0];
         const fCarr = document.getElementById('fileCarreras').files[0];
-        if (fAsp) form.append('aspirantes', fAsp);
-        if (fCarr) form.append('carreras', fCarr);
+        if (fAsp) fd.append('aspirantes', fAsp);
+        if (fCarr) fd.append('carreras', fCarr);
         try {
-          await api('/admin/upload', {method: 'POST', body: form});
-          alert('Archivos cargados correctamente.');
+          const res = await fetch('/admin/upload', { method: 'POST', body: fd, credentials: 'include' });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Error al subir');
+          alert('Archivos subidos correctamente.');
         } catch (e) {
           alert('Error: ' + e.message);
         }
       });
 
       // Assign all
-      document.getElementById('btnAssignAll').addEventListener('click', async () => {
-        if (!confirm('¿Deseas ejecutar la asignación automática para todas las carreras?')) return;
+      document.getElementById('btnAssignAll')?.addEventListener('click', async () => {
+        if (!confirm('¿Asignar cupos automáticamente a todas las carreras?')) return;
         try {
-          const res = await api('/admin/assign', {method: 'POST'});
-          alert('Asignación completada. Revisa las carreras.');
-          loadCarreras();
+          const res = await api('/admin/assign', { method: 'POST' });
+          alert('Asignación finalizada.');
+          await cargarColegios();
         } catch (e) {
-          alert('Error: ' + e.message);
+          alert('Error al asignar: ' + e.message);
         }
       });
 
-      // Generate report
-      document.getElementById('btnReport').addEventListener('click', async () => {
+      // Report
+      document.getElementById('btnReport')?.addEventListener('click', async () => {
         try {
-          await api('/admin/report', {method: 'POST'});
-          alert('Reporte generado (se imprimirá en la consola del servidor).');
+          const res = await api('/admin/report', { method: 'POST' });
+          alert('Reporte generado (si todo salió bien).');
         } catch (e) {
-          alert('Error: ' + e.message);
+          alert('Error al generar reporte: ' + e.message);
         }
       });
 
-      // Load carreras and show buttons
-      async function loadCarreras(){
+      // Cargar carreras y mostrarlas en la UI con botones
+      async function cargarColegios() {
         try {
-          const carreras = await api('/api/carreras');
+          const carreras = await api('/api/carreras', { method: 'GET' });
           const container = document.getElementById('carrerasContainer');
           container.innerHTML = '';
-          if (!carreras.length) {
-            container.innerHTML = '<div class="alert alert-warning">No hay carreras cargadas.</div>';
+          if (!carreras || carreras.length === 0) {
+            container.innerHTML = '<p>No hay carreras cargadas.</p>';
             return;
           }
           carreras.forEach(c => {
-            const el = document.createElement('div');
-            el.className = 'd-flex align-items-center mb-2';
-            el.innerHTML = `
-              <div class="flex-fill">
-                <strong>${c.nombre}</strong> — Cupos: ${c.oferta_cupos} — Asignados: ${c.cupos_asignados}
+            const div = document.createElement('div');
+            div.className = 'mb-3 d-flex justify-content-between align-items-center';
+            div.innerHTML = `
+              <div>
+                <strong>${c.nombre}</strong> — Cupos: <span id="cupos-${c.id}">${c.oferta_cupos}</span> — Asignados: ${c.cupos_asignados}
               </div>
               <div>
-                <button class="btn btn-sm btn-outline-primary me-2" data-id="${c.id}" onclick="verCupos('${c.id}')">Ver cupos</button>
-                <button class="btn btn-sm btn-outline-danger" data-id="${c.id}" onclick="eliminarCuposCarrera('${c.id}')">Eliminar todos cupos</button>
+                <button class="btn btn-sm btn-outline-primary me-2 btn-ver-cupos" data-id="${c.id}">Ver cupos</button>
+                <button class="btn btn-sm btn-outline-secondary me-2 btn-editar-cupos" data-id="${c.id}" data-nombre="${c.nombre}" data-oferta="${c.oferta_cupos}">Editar cupos</button>
+                <button class="btn btn-sm btn-outline-danger btn-eliminar-cupos" data-id="${c.id}">Eliminar todos cupos</button>
               </div>
             `;
-            container.appendChild(el);
+            container.appendChild(div);
           });
+
+          // Attach event listeners to newly created buttons
+          document.querySelectorAll('.btn-editar-cupos').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+              const id = btn.getAttribute('data-id');
+              const nombre = btn.getAttribute('data-nombre');
+              const oferta = btn.getAttribute('data-oferta');
+              abrirModalEditar(id, nombre, oferta);
+            });
+          });
+
+          document.querySelectorAll('.btn-ver-cupos').forEach(btn => {
+            btn.addEventListener('click', async () => {
+              const id = btn.getAttribute('data-id');
+              try {
+                const data = await api(`/api/carreras/${id}/cupos`, { method: 'GET' });
+                // mostrar en cuposContainer
+                const cont = document.getElementById('cuposContainer');
+                cont.innerHTML = `<h5>Cupos para ${data.carrera}</h5>`;
+                const table = document.createElement('table');
+                table.className = 'table table-sm';
+                table.innerHTML = '<thead><tr><th>ID</th><th>Estado</th><th>Aspirante</th></tr></thead>';
+                const tb = document.createElement('tbody');
+                data.cupos.forEach(cc => {
+                  const tr = document.createElement('tr');
+                  tr.innerHTML = `<td>${cc.id_cupo}</td><td>${cc.estado}</td><td>${cc.aspirante ? cc.aspirante.nombre : ''}</td>`;
+                  tb.appendChild(tr);
+                });
+                table.appendChild(tb);
+                cont.appendChild(table);
+              } catch (e) {
+                alert('Error al obtener cupos: ' + e.message);
+              }
+            });
+          });
+
+          document.querySelectorAll('.btn-eliminar-cupos').forEach(btn => {
+            btn.addEventListener('click', async () => {
+              if (!confirm('¿Eliminar todos los cupos de esta carrera? Esta acción puede afectar asignaciones.')) return;
+              const id = btn.getAttribute('data-id');
+              try {
+                // Obtén la lista de cupos y borra uno por uno (o crea endpoint específico)
+                const data = await api(`/api/carreras/${id}/cupos`, { method: 'GET' });
+                if (data && data.cupos) {
+                  for (const cup of data.cupos) {
+                    await api(`/api/cupos/${cup.id_cupo}`, { method: 'DELETE' });
+                  }
+                }
+                alert('Cupos eliminados.');
+                await cargarColegios();
+              } catch (e) {
+                alert('Error al eliminar cupos: ' + e.message);
+              }
+            });
+          });
+
         } catch (e) {
           console.error(e);
           alert('Error cargando carreras: ' + e.message);
         }
       }
 
-      // Ver cupos de carrera
-      async function verCupos(id) {
+      // Modal helpers
+      let carreraEditarId = null;
+      const modalEditar = new bootstrap.Modal(document.getElementById('modalEditarCupos'));
+      function abrirModalEditar(id, nombre, oferta) {
+        carreraEditarId = id;
+        document.getElementById('editCarreraNombre').value = nombre;
+        document.getElementById('editCuposActuales').value = oferta;
+        document.getElementById('editNuevaOferta').value = oferta;
+        document.getElementById('editError').classList.add('d-none');
+        modalEditar.show();
+      }
+
+      document.getElementById('btnGuardarCupos')?.addEventListener('click', async () => {
+        const nueva = parseInt(document.getElementById('editNuevaOferta').value);
+        if (isNaN(nueva) || nueva < 0) {
+          document.getElementById('editError').textContent = 'Introduce un número válido de cupos.';
+          document.getElementById('editError').classList.remove('d-none');
+          return;
+        }
         try {
-          const res = await api('/api/carreras/' + encodeURIComponent(id) + '/cupos');
-          const cont = document.getElementById('cuposContainer');
-          let html = `<h5>Cupos - ${res.carrera}</h5>`;
-          html += `<table class="table table-sm"><thead><tr><th>ID</th><th>Estado</th><th>Aspirante</th><th>Acciones</th></tr></thead><tbody>`;
-          res.cupos.forEach(c => {
-            const aspir = c.aspirante ? `${c.aspirante.cedula} — ${c.aspirante.nombre}` : '-';
-            html += `<tr>
-              <td>${c.id_cupo}</td>
-              <td>${c.estado}</td>
-              <td>${aspir}</td>
-              <td>
-                <button class="btn btn-sm btn-outline-warning" onclick="liberarCupo('${c.id_cupo}')">Liberar</button>
-                <button class="btn btn-sm btn-outline-danger" onclick="eliminarCupo('${c.id_cupo}')">Eliminar</button>
-              </td>
-            </tr>`;
+          const res = await api(`/api/carreras/${encodeURIComponent(carreraEditarId)}/update_oferta`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ nueva_oferta: nueva })
           });
-          html += `</tbody></table>`;
-          cont.innerHTML = html;
-        } catch (e) {
-          alert('Error: ' + e.message);
-        }
-      }
-
-      // Liberar cupo
-      async function liberarCupo(id) {
-        try {
-          await api('/api/cupos/' + encodeURIComponent(id) + '/liberar', {method:'POST'});
-          alert('Cupo liberado');
-          loadCarreras();
-        } catch (e) {
-          alert('Error: ' + e.message);
-        }
-      }
-
-      // Eliminar cupo
-      async function eliminarCupo(id) {
-        if (!confirm('¿Eliminar este cupo permanentemente?')) return;
-        try {
-          await api('/api/cupos/' + encodeURIComponent(id), {method:'DELETE'});
-          alert('Cupo eliminado');
-          loadCarreras();
-        } catch (e) {
-          alert('Error: ' + e.message);
-        }
-      }
-
-      // Eliminar todos los cupos de una carrera (acción peligrosa)
-      async function eliminarCuposCarrera(carreraId) {
-        if (!confirm('¿Eliminar todos los cupos de esta carrera?')) return;
-        try {
-          const res = await api('/api/carreras/' + encodeURIComponent(carreraId) + '/cupos');
-          for (const c of res.cupos) {
-            await api('/api/cupos/' + encodeURIComponent(c.id_cupo), {method: 'DELETE'});
+          if (res && res.ok) {
+            modalEditar.hide();
+            await cargarColegios();
+            alert('Oferta actualizada correctamente.');
+          } else {
+            document.getElementById('editError').textContent = (res && res.error) ? res.error : 'No se pudo actualizar.';
+            document.getElementById('editError').classList.remove('d-none');
           }
-          alert('Todos los cupos eliminados para la carrera.');
-          loadCarreras();
         } catch (e) {
-          alert('Error: ' + e.message);
+          document.getElementById('editError').textContent = e.message;
+          document.getElementById('editError').classList.remove('d-none');
         }
-      }
+      });
 
-      // Load aspirantes into table
-      async function loadAspirantes(){
+      // Cargar aspirantes (panel)
+      async function cargarAspirantes() {
         try {
-          const data = await api('/api/aspirantes');
+          const list = await api('/api/aspirantes', { method: 'GET' });
           const tbody = document.querySelector('#tableAspirantes tbody');
           tbody.innerHTML = '';
-          if (!data || !data.length) {
-            tbody.innerHTML = '<tr><td colspan="4">No hay aspirantes cargados. Sube BaseDatos.csv desde "Subir CSV".</td></tr>';
+          if (!list || list.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4">No hay aspirantes.</td></tr>';
             return;
           }
-          for (const a of data) {
+          list.forEach(a => {
             const tr = document.createElement('tr');
-            tr.innerHTML = `
-              <td>${a.cedula || ''}</td>
-              <td>${a.nombre || ''}</td>
-              <td>${a.puntaje || ''}</td>
-              <td>${a.estado || ''}</td>
-            `;
+            tr.innerHTML = `<td>${a.cedula}</td><td>${a.nombre}</td><td>${a.puntaje}</td><td>${a.estado}</td>`;
             tbody.appendChild(tr);
-          }
+          });
         } catch (e) {
-          console.error('Error cargando aspirantes:', e);
-          const tbody = document.querySelector('#tableAspirantes tbody');
-          tbody.innerHTML = '<tr><td colspan="4">Error cargando aspirantes. Revisa la consola del servidor.</td></tr>';
+          alert('Error cargando aspirantes: ' + e.message);
         }
       }
 
-      // Inicializar vista: mostrar upload
+      // Logout
+      document.getElementById('logoutBtn')?.addEventListener('click', async () => {
+        try {
+          await fetch('/logout', { method: 'POST', credentials: 'include' });
+        } finally {
+          window.location = '/';
+        }
+      });
+
+      // Arranque: seleccionar panel upload por defecto
       document.getElementById('menuUpload').click();
     </script>
   </body>
