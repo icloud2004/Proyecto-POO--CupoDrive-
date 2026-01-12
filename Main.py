@@ -1,13 +1,13 @@
 from Cargar_datos import Cargar_datos
 from Carrera import Carrera
-from Asignacion_cupos import Asignacion_cupo
+from Asignación_cupos import Asignacion_cupo
 from Admin import Administrador
 from Aceptacion_cupo import Aceptacion_cupo
 from Certificado_aceptacion import Certificado_aceptacion
 from Repositoriocupos import RepositorioCupos
 from Segmento import Segmento
 from Universidad import Universidad
-from Periodo_academico import Periodo_academico
+from Periodo_acádemico import Periodo_academico
 
 
 #EL MAIN LO BASAMOS RESPECTO A LA BASE DE DATOS CSV QUE TENEMOS EN NUESTRO REPOSITORIO.
