@@ -1,6 +1,6 @@
 import csv
 from Aspirante import Aspirante
-
+#PATRON DE DISEÑO SINGLETON
 class Cargar_datos:
     # Esta variable guardará la única instancia de la clase
     _instancia_unica = None

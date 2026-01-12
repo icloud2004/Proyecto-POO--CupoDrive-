@@ -1,4 +1,5 @@
 # Repositoriocupos.py
+#PATRON DE DISEÑO ADAPTADOR
 # Adaptador que utiliza persistencia JSON (persistencia.py)
 import traceback
 from typing import List, Optional
