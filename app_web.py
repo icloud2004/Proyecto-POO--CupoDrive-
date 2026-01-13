@@ -1,8 +1,11 @@
-# app_web.py (modificado: soporte de segmentos GLOBALES en lugar de segmentos por carrera en UI)
+# app_web.py (modificado: soporte de segmentos GLOBALES y carga robusta de Asignacion_cupos)
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, abort
 import os
 import traceback
 import json
+import glob
+import importlib
+import importlib.util
 
 # Intentar importar cargadores con varios nombres posibles (repos pueden variar)
 try:
@@ -39,18 +42,110 @@ try:
 except Exception:
     Universidad = None
 
-# Importar estrategias (la asignación seguirá usando Strategy; MultiSegmentStrategy usará los segmentos globales)
-try:
-    from Asignacion_cupos import Asignacion_cupo, MultiSegmentStrategy, SegmentQuotaStrategy, MeritStrategy, LotteryStrategy
-except Exception:
-    try:
-        from Asignacion_cupos import Asignacion_cupo, MultiSegmentStrategy, SegmentQuotaStrategy, MeritStrategy, LotteryStrategy
-    except Exception:
+# ---------------------------
+# Carga robusta del módulo de asignación
+# ---------------------------
+# No intentar importar directamente aquí con try/except que oculta la traza.
+# En su lugar usamos load_assignment_module() y lo invocamos en before_first_request
+Asignacion_cupo = None
+MultiSegmentStrategy = None
+SegmentQuotaStrategy = None
+MeritStrategy = None
+LotteryStrategy = None
+
+def load_assignment_module(verbose: bool = True) -> bool:
+    """
+    Intenta cargar Asignacion_cupos de forma robusta:
+      - por nombre ('Asignacion_cupos' / 'asignacion_cupos')
+      - si falla, busca candidatos en el mismo directorio y carga por ruta
+    Asigna las variables globales esperadas si carga correctamente.
+    Devuelve True si se cargó correctamente, False en caso contrario.
+    """
+    global Asignacion_cupo, MultiSegmentStrategy, SegmentQuotaStrategy, MeritStrategy, LotteryStrategy
+
+    module = None
+
+    # 1) intentar import por nombre
+    for name in ("Asignacion_cupos", "asignacion_cupos"):
+        try:
+            module = importlib.import_module(name)
+            if verbose:
+                print(f"[INFO] Imported assignment module by name: {name} -> {getattr(module, '__file__', None)}")
+            break
+        except Exception as e:
+            if verbose:
+                print(f"[DEBUG] Intento import '{name}' falló:")
+                traceback.print_exception(type(e), e, e.__traceback__)
+            module = None
+
+    # 2) si no cargó por nombre, intentar cargar por path
+    if module is None:
+        base_dir = os.path.dirname(__file__)
+        patterns = ["Asignacion_cupos.py", "asignacion_cupos.py", "*asign*cupos*.py"]
+        candidates = []
+        for p in patterns:
+            candidates.extend(glob.glob(os.path.join(base_dir, p)))
+        # eliminar duplicados manteniendo orden
+        seen = set()
+        candidates_unique = []
+        for c in candidates:
+            if c not in seen:
+                seen.add(c)
+                candidates_unique.append(c)
+
+        for path in candidates_unique:
+            try:
+                if verbose:
+                    print(f"[INFO] Intentando cargar módulo desde path: {path}")
+                spec = importlib.util.spec_from_file_location("Asignacion_cupos_dynamic", path)
+                mod = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(mod)
+                module = mod
+                if verbose:
+                    print(f"[INFO] Cargado Asignacion_cupos desde: {path}")
+                break
+            except Exception as e:
+                if verbose:
+                    print(f"[ERROR] Falló carga dinámica desde {path}:")
+                    traceback.print_exception(type(e), e, e.__traceback__)
+                module = None
+
+    if module is None:
+        if verbose:
+            print("[WARN] No se pudo cargar el módulo de asignación.")
         Asignacion_cupo = None
         MultiSegmentStrategy = None
         SegmentQuotaStrategy = None
         MeritStrategy = None
         LotteryStrategy = None
+        return False
+
+    # Extraer símbolos esperados
+    Asignacion_cupo = getattr(module, "Asignacion_cupo", None)
+    MultiSegmentStrategy = getattr(module, "MultiSegmentStrategy", None)
+    SegmentQuotaStrategy = getattr(module, "SegmentQuotaStrategy", None)
+    MeritStrategy = getattr(module, "MeritStrategy", None)
+    LotteryStrategy = getattr(module, "LotteryStrategy", None)
+
+    if verbose:
+        print("[INFO] Símbolos exportados desde Asignacion_cupos:",
+              "Asignacion_cupo=", bool(Asignacion_cupo),
+              "MultiSegmentStrategy=", bool(MultiSegmentStrategy))
+    return True
+
+# Llamar a la carga en el proceso que atiende peticiones (evita problemas con reloader)
+# before_first_request se ejecuta en el proceso correcto cuando usas el reloader.
+# También intentaremos cargar dinámicamente justo al invocar /admin/assign si hace falta.
+app = Flask(__name__)
+app.template_folder = os.path.join(os.path.dirname(__file__), "templates")
+app.secret_key = os.environ.get("CUPODRIVE_SECRET", "dev-secret-key")
+
+@app.before_first_request
+def _ensure_assignment_module_loaded():
+    loaded = load_assignment_module()
+    if not loaded:
+        print("[WARN] Módulo de asignación no pudo cargarse en before_first_request. Se reintentará en el endpoint de asignación.")
+
 
 # Persistencia helpers (intentar importar)
 try:
@@ -65,10 +160,6 @@ except Exception:
         pass
     def load_cupos(*args, **kwargs):
         return []
-
-app = Flask(__name__)
-app.template_folder = os.path.join(os.path.dirname(__file__), "templates")
-app.secret_key = os.environ.get("CUPODRIVE_SECRET", "dev-secret-key")
 
 # ---------------------------
 # Estado en memoria & paths
@@ -248,10 +339,17 @@ def admin_upload():
 @app.route("/admin/assign", methods=["POST"])
 @login_required(role="admin")
 def admin_assign_all():
+    global Asignacion_cupo, MultiSegmentStrategy
+
     if not carreras_list or not aspirantes_list:
         return jsonify({"error": "No hay carreras o aspirantes cargados"}), 400
+
+    # Si el módulo de asignación no está cargado, intentar reintentar carga ahora
     if Asignacion_cupo is None:
-        return jsonify({"error": "Módulo de asignación no disponible"}), 500
+        print("[DEBUG] Asignacion_cupo es None en admin_assign_all -> reintentando load_assignment_module()")
+        load_assignment_module()
+        if Asignacion_cupo is None:
+            return jsonify({"error": "Módulo de asignación no disponible"}), 500
 
     # Cargar segmentos globales y asignarlos a cada carrera antes de ejecutar la estrategia
     global_segments = load_global_segmentos()  # lista de dicts
@@ -270,7 +368,7 @@ def admin_assign_all():
     StrategyClass = MultiSegmentStrategy or SegmentQuotaStrategy or MeritStrategy
     for carrera in carreras_list:
         try:
-            contexto = Asignacion_cupo(carrera, aspirantes_list, StrategyClass())
+            contexto = Asignacion_cupo(carrera, aspirantes_list, StrategyClass() if StrategyClass else None)
             asignados = contexto.asignar_cupos()
         except Exception as e:
             asignados = []
