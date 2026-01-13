@@ -1,4 +1,4 @@
-# app_web.py (modificado: soporte de segmentos GLOBALES y carga robusta de Asignacion_cupos)
+# app_web.py (versión corregida: carga robusta de Asignacion_cupos, registro seguro de inicialización)
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, abort
 import os
 import traceback
@@ -21,7 +21,7 @@ except Exception:
     except Exception:
         CargarCarreras = None
 
-# Importar modelos y lógica
+# Importar modelos y lógica (no fatales si faltan)
 try:
     from Carrera import Carrera
 except Exception:
@@ -35,7 +35,7 @@ except Exception:
 try:
     from Repositoriocupos import RepositorioCupos
 except Exception:
-    RepositorioCupos = None
+    Repositoriocupos = None
 
 try:
     from Universidad import Universidad
@@ -45,8 +45,6 @@ except Exception:
 # ---------------------------
 # Carga robusta del módulo de asignación
 # ---------------------------
-# No intentar importar directamente aquí con try/except que oculta la traza.
-# En su lugar usamos load_assignment_module() y lo invocamos en before_first_request
 Asignacion_cupo = None
 MultiSegmentStrategy = None
 SegmentQuotaStrategy = None
@@ -133,72 +131,18 @@ def load_assignment_module(verbose: bool = True) -> bool:
               "MultiSegmentStrategy=", bool(MultiSegmentStrategy))
     return True
 
-# Llamar a la carga en el proceso que atiende peticiones (evita problemas con reloader)
-# before_first_request se ejecuta en el proceso correcto cuando usas el reloader.
-# También intentaremos cargar dinámicamente justo al invocar /admin/assign si hace falta.
+# ---------------------------
+# Flask app
+# ---------------------------
 app = Flask(__name__)
 app.template_folder = os.path.join(os.path.dirname(__file__), "templates")
 app.secret_key = os.environ.get("CUPODRIVE_SECRET", "dev-secret-key")
 
-# Registro robusto de la inicialización (evita usar decoradores que fallen)
-def _register_load_default_data_once():
-    """
-    Registra load_default_data_once() para que se ejecute en el proceso
-    correcto al arrancar la app. Intenta las API disponibles en Flask:
-    - before_serving (preferido)
-    - before_first_request (si existe)
-    - si no hay ninguna, ejecuta la carga inmediatamente.
-    """
-    try:
-        if hasattr(app, "before_serving"):
-            # app.before_serving puede ser usado tanto como decorador como función
-            try:
-                app.before_serving(load_default_data_once)
-                print("[INFO] Registrado load_default_data_once con app.before_serving()")
-                return
-            except Exception:
-                # fallback: intentar como decorador (compatibilidades)
-                try:
-                    @app.before_serving
-                    def _inner_load():
-                        load_default_data_once()
-                    print("[INFO] Registrado load_default_data_once vía decorator before_serving")
-                    return
-                except Exception:
-                    traceback.print_exc()
-        if hasattr(app, "before_first_request"):
-            try:
-                app.before_first_request(load_default_data_once)
-                print("[INFO] Registrado load_default_data_once con app.before_first_request()")
-                return
-            except Exception:
-                try:
-                    @app.before_first_request
-                    def _inner_load2():
-                        load_default_data_once()
-                    print("[INFO] Registrado load_default_data_once vía decorator before_first_request")
-                    return
-                except Exception:
-                    traceback.print_exc()
-    except Exception:
-        # En caso de que hasattr o acceso a atributos lance AttributeError u otro error,
-        # capturamos aquí y hacemos fallback a ejecución inmediata.
-        traceback.print_exc()
-
-    # Si llegamos aquí, no se pudo registrar en los hooks -> ejecutar ahora
-    try:
-        print("[WARN] No se pudo registrar la carga inicial en hooks de Flask; ejecutando load_default_data_once() ahora.")
-        load_default_data_once()
-    except Exception:
-        traceback.print_exc()
-
-# Ejecutar el registro robusto
-_register_load_default_data_once()
 # Persistencia helpers (intentar importar)
 try:
     from persistencia import save_aspirantes, load_aspirantes, save_cupos, load_cupos
 except Exception:
-    # shims básicos
+    # shims básicos en caso de ausencia
     def save_aspirantes(*args, **kwargs):
         pass
     def load_aspirantes(*args, **kwargs):
@@ -225,8 +169,8 @@ repo = None
 def ensure_repo():
     global repo
     try:
-        if repo is None and RepositorioCupos is not None:
-            repo = RepositorioCupos(carreras_list_ref=carreras_list)
+        if repo is None and Repositoriocupos is not None:
+            repo = Repositoriocupos(carreras_list_ref=carreras_list)
         else:
             if getattr(repo, "carreras_ref", None) is None and carreras_list:
                 repo.carreras_ref = carreras_list
@@ -763,27 +707,77 @@ def load_default_data():
             except Exception:
                 repo = None
 
-# Ejecutar load_default_data solo en proceso correcto para evitar duplicado por reloader
 def load_default_data_once():
+    """
+    Ejecuta load_default_data() solo si estamos en el proceso correcto (reloader child
+    o modo sin debug). Además intenta cargar el módulo de asignación en ese proceso.
+    """
     is_reloader_child = os.environ.get("WERKZEUG_RUN_MAIN") == "true"
     is_flask_cli = os.environ.get("FLASK_RUN_FROM_CLI") == "true"
     if not (is_reloader_child or is_flask_cli or not app.debug):
         return
     try:
+        # Cargar datos por defecto
         load_default_data()
+        # Intentar cargar el módulo de asignación en el proceso que servirá peticiones
+        try:
+            load_assignment_module()
+        except Exception:
+            traceback.print_exc()
     except Exception:
         traceback.print_exc()
 
-if hasattr(app, "before_serving"):
-    @app.before_serving
-    def _load_on_start_safe():
+# Registro robusto de la inicialización (se define ahora que load_default_data_once existe)
+def _register_load_default_data_once():
+    """
+    Registra load_default_data_once() para que se ejecute en el proceso
+    correcto al arrancar la app. Intenta las API disponibles en Flask:
+    - before_serving (preferido)
+    - before_first_request (si existe)
+    - si no hay ninguna, ejecuta la carga inmediatamente.
+    """
+    try:
+        if hasattr(app, "before_serving"):
+            try:
+                app.before_serving(load_default_data_once)
+                print("[INFO] Registrado load_default_data_once con app.before_serving()")
+                return
+            except Exception:
+                try:
+                    @app.before_serving
+                    def _inner_load():
+                        load_default_data_once()
+                    print("[INFO] Registrado load_default_data_once vía decorator before_serving")
+                    return
+                except Exception:
+                    traceback.print_exc()
+        if hasattr(app, "before_first_request"):
+            try:
+                app.before_first_request(load_default_data_once)
+                print("[INFO] Registrado load_default_data_once con app.before_first_request()")
+                return
+            except Exception:
+                try:
+                    @app.before_first_request
+                    def _inner_load2():
+                        load_default_data_once()
+                    print("[INFO] Registrado load_default_data_once vía decorator before_first_request")
+                    return
+                except Exception:
+                    traceback.print_exc()
+    except Exception:
+        traceback.print_exc()
+
+    # Si llegamos aquí, no se pudo registrar en los hooks -> ejecutar ahora
+    try:
+        print("[WARN] No se pudo registrar la carga inicial en hooks de Flask; ejecutando load_default_data_once() ahora.")
         load_default_data_once()
-elif hasattr(app, "before_first_request"):
-    @app.before_first_request
-    def _load_on_first_safe():
-        load_default_data_once()
-else:
-    load_default_data_once()
+    except Exception:
+        traceback.print_exc()
+
+# Ejecutar el registro robusto ahora que la función existe
+_register_load_default_data_once()
 
 if __name__ == "__main__":
-    if __name__ == "__main__": app.run(debug=True, use_reloader=False, port=5000)
+    # Recomiendo arrancar sin reloader mientras depuras este comportamiento.
+    app.run(debug=True, use_reloader=False, port=5000)
