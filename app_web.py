@@ -140,13 +140,60 @@ app = Flask(__name__)
 app.template_folder = os.path.join(os.path.dirname(__file__), "templates")
 app.secret_key = os.environ.get("CUPODRIVE_SECRET", "dev-secret-key")
 
-@app.before_first_request
-def _ensure_assignment_module_loaded():
-    loaded = load_assignment_module()
-    if not loaded:
-        print("[WARN] Módulo de asignación no pudo cargarse en before_first_request. Se reintentará en el endpoint de asignación.")
+# Registro robusto de la inicialización (evita usar decoradores que fallen)
+def _register_load_default_data_once():
+    """
+    Registra load_default_data_once() para que se ejecute en el proceso
+    correcto al arrancar la app. Intenta las API disponibles en Flask:
+    - before_serving (preferido)
+    - before_first_request (si existe)
+    - si no hay ninguna, ejecuta la carga inmediatamente.
+    """
+    try:
+        if hasattr(app, "before_serving"):
+            # app.before_serving puede ser usado tanto como decorador como función
+            try:
+                app.before_serving(load_default_data_once)
+                print("[INFO] Registrado load_default_data_once con app.before_serving()")
+                return
+            except Exception:
+                # fallback: intentar como decorador (compatibilidades)
+                try:
+                    @app.before_serving
+                    def _inner_load():
+                        load_default_data_once()
+                    print("[INFO] Registrado load_default_data_once vía decorator before_serving")
+                    return
+                except Exception:
+                    traceback.print_exc()
+        if hasattr(app, "before_first_request"):
+            try:
+                app.before_first_request(load_default_data_once)
+                print("[INFO] Registrado load_default_data_once con app.before_first_request()")
+                return
+            except Exception:
+                try:
+                    @app.before_first_request
+                    def _inner_load2():
+                        load_default_data_once()
+                    print("[INFO] Registrado load_default_data_once vía decorator before_first_request")
+                    return
+                except Exception:
+                    traceback.print_exc()
+    except Exception:
+        # En caso de que hasattr o acceso a atributos lance AttributeError u otro error,
+        # capturamos aquí y hacemos fallback a ejecución inmediata.
+        traceback.print_exc()
 
+    # Si llegamos aquí, no se pudo registrar en los hooks -> ejecutar ahora
+    try:
+        print("[WARN] No se pudo registrar la carga inicial en hooks de Flask; ejecutando load_default_data_once() ahora.")
+        load_default_data_once()
+    except Exception:
+        traceback.print_exc()
 
+# Ejecutar el registro robusto
+_register_load_default_data_once()
 # Persistencia helpers (intentar importar)
 try:
     from persistencia import save_aspirantes, load_aspirantes, save_cupos, load_cupos
