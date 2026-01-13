@@ -1,4 +1,3 @@
-
 """
 Módulo de asignación de cupos — versión robusta y compatible con app_web.py
 
@@ -43,25 +42,79 @@ def _stable_sort(candidates):
 
 def _postulados_para_carrera(carrera, aspirantes):
     """
-    Filtra aspirantes con estado 'Postulado' (case-insensitive).
-    Si carrera tiene campus/sede, filtra por campus si está presente en el aspirante.
+    Filtra aspirantes que deben considerarse 'postulados' para una carrera.
+    - Es tolerante a diferentes claves de 'estado' en dicts/objetos.
+    - Si la carrera tiene campus/sede se intentará filtrar por campus solo si
+      al menos algunos aspirantes contienen información de campus (heurística).
     """
     out = []
-    campus_carrera = getattr(carrera, "campus", None) or getattr(carrera, "sede", None)
+
+    # normalizar campus de la carrera (si existe)
+    campus_carrera = (getattr(carrera, "campus", None) or getattr(carrera, "sede", None) or "")
+    campus_carrera = str(campus_carrera).strip().lower() if campus_carrera else ""
+
+    # detecta si al menos algún aspirante tiene campo campus relevante
+    has_any_asp_campus = False
     for a in aspirantes:
         try:
-            estado = (a.get("estado") if isinstance(a, dict) else getattr(a, "estado", None))
-            if estado is None or str(estado).strip().lower() not in ("postulado", "postulacion", "inscrito", "postulado"):
+            if isinstance(a, dict):
+                if any(a.get(k) for k in ("campus", "CAN_NOMBRE", "sede", "Sede", "SEDE")):
+                    has_any_asp_campus = True
+                    break
+            else:
+                if getattr(a, "campus", None) or getattr(a, "sede", None):
+                    has_any_asp_campus = True
+                    break
+        except Exception:
+            continue
+
+    for a in aspirantes:
+        try:
+            # aceptar múltiples claves para 'estado'
+            if isinstance(a, dict):
+                estado = (a.get("estado")
+                          or a.get("acepta_estado")
+                          or a.get("estado_postulacion")
+                          or a.get("estado_post")
+                          or a.get("status")
+                          or "")
+            else:
+                estado = (getattr(a, "estado", None)
+                          or getattr(a, "acepta_estado", None)
+                          or getattr(a, "estado_postulacion", None)
+                          or getattr(a, "status", None)
+                          or "")
+
+            estado_str = str(estado).strip().lower() if estado is not None else ""
+
+            # criterio flexible para considerar 'postulado'
+            is_postulado = False
+            if estado_str:
+                # matches por substrings comunes: postu*, inscri*, admit*
+                if "postul" in estado_str or "inscri" in estado_str or "admit" in estado_str:
+                    is_postulado = True
+                else:
+                    # lista conservadora adicional
+                    if estado_str in ("postulado", "postulacion", "inscrito", "preinscrito", "registrado"):
+                        is_postulado = True
+            # Si no hay estado y no queremos descartar por eso, NO asumimos postulado.
+            if not is_postulado:
                 continue
-            if campus_carrera:
+
+            # Filtrar por campus sólo si la carrera tiene campus y los aspirantes
+            # efectivamente contienen campus en sus registros (para evitar filtrar todo).
+            if campus_carrera and has_any_asp_campus:
                 if isinstance(a, dict):
-                    campus_asp = a.get("campus") or a.get("CAN_NOMBRE") or ""
+                    campus_asp = a.get("campus") or a.get("CAN_NOMBRE") or a.get("sede") or a.get("Sede") or ""
                 else:
                     campus_asp = getattr(a, "campus", None) or getattr(a, "sede", None) or ""
-                if campus_asp is None or str(campus_asp).strip().lower() != str(campus_carrera).strip().lower():
+                campus_asp = str(campus_asp).strip().lower() if campus_asp is not None else ""
+                if not campus_asp or campus_asp != campus_carrera:
                     continue
+
             out.append(a)
         except Exception:
+            # skip problematic entries
             continue
     return out
 
