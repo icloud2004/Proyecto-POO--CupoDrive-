@@ -43,15 +43,46 @@ def _stable_sort(candidates):
 def _postulados_para_carrera(carrera, aspirantes):
     """
     Filtra aspirantes con estado 'Postulado' (case-insensitive).
-    Si carrera tiene campus/sede, filtra por campus si está presente en el aspirante.
+    - Si la carrera tiene campus/sede, filtra por campus si está presente en el aspirante.
+    - Si el aspirante tiene un campo indicando la carrera postulada (p.ej. 'carrera_postulada' o 'nombre_carrera'),
+      se requiere que coincida (case-insensitive) con carrera.nombre para incluirlo.
     """
     out = []
+    # nombre de la carrera objetivo (normalizado)
+    carrera_nombre = (getattr(carrera, "nombre", "") or getattr(carrera, "nombre_carrera", "")).strip().lower()
     campus_carrera = getattr(carrera, "campus", None) or getattr(carrera, "sede", None)
     for a in aspirantes:
         try:
             estado = (a.get("estado") if isinstance(a, dict) else getattr(a, "estado", None))
             if estado is None or str(estado).strip().lower() not in ("postulado", "postulacion", "inscrito", "postulado"):
                 continue
+
+            # Si el aspirante declara la carrera postulada, comprobar que coincida con la carrera objetivo.
+            asp_carrera_val = None
+            if isinstance(a, dict):
+                asp_carrera_val = (
+                    a.get("carrera_postulada")
+                    or a.get("nombre_carrera")
+                    or a.get("carrera")
+                    or a.get("pro_nombre")
+                    or a.get("nombre")
+                )
+            else:
+                asp_carrera_val = (
+                    getattr(a, "carrera_postulada", None)
+                    or getattr(a, "nombre_carrera", None)
+                    or getattr(a, "carrera", None)
+                    or getattr(a, "pro_nombre", None)
+                    or None
+                )
+
+            if asp_carrera_val:
+                # si la carrera objetivo está definida, exigir coincidencia exacta (case-insensitive)
+                if carrera_nombre and str(asp_carrera_val).strip().lower() != carrera_nombre:
+                    continue
+                # si carrera_nombre está vacía, permitimos (no tenemos con qué comparar)
+
+            # Si la carrera tiene campus/sede, filtrar por campus si está presente en el aspirante.
             if campus_carrera:
                 if isinstance(a, dict):
                     campus_asp = a.get("campus") or a.get("CAN_NOMBRE") or ""
@@ -59,6 +90,7 @@ def _postulados_para_carrera(carrera, aspirantes):
                     campus_asp = getattr(a, "campus", None) or getattr(a, "sede", None) or ""
                 if campus_asp is None or str(campus_asp).strip().lower() != str(campus_carrera).strip().lower():
                     continue
+
             out.append(a)
         except Exception:
             continue
@@ -99,7 +131,7 @@ def _asignar_a_lista(cupos, aspirantes_seleccionados, carrera):
 class AssignmentStrategy(ABC):
     @abstractmethod
     def assign(self, carrera, aspirantes):
-        pass
+        raise NotImplementedError()
 
 # Estrategia multi-segmentos (robusta)
 class MultiSegmentStrategy(AssignmentStrategy):
@@ -168,7 +200,7 @@ class MultiSegmentStrategy(AssignmentStrategy):
             else:
                 cuotas[idx_pop] += diff
 
-        # candidatos postulados para la carrera
+        # candidatos postulados para la carrera (ahora filtrados por carrera y campus)
         postulados = _postulados_para_carrera(carrera, aspirantes)
 
         # mapear pertenencia de aspirantes a segmentos (si no tiene -> Población general)

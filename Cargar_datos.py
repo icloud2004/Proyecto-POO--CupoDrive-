@@ -8,11 +8,11 @@ class Cargar_datos:
     def __init__(self, ruta_csv="BaseDatos.csv"):
         self.ruta_csv = ruta_csv
         self.aspirantes = []
-        self.ya_cargo = False # Para saber si ya leímos el archivo
+        self.ya_cargo = False  # Para saber si ya leímos el archivo
 
     @classmethod
     def obtener_instancia(cls):
-        """Este método asegura que solo se cree un objeto"""
+        """Este método asegura que solo se cree un objeto (singleton simple)."""
         if cls._instancia_unica is None:
             cls._instancia_unica = cls()
         return cls._instancia_unica
@@ -25,7 +25,11 @@ class Cargar_datos:
         try:
             with open(self.ruta_csv, newline="", encoding="utf-8") as data:
                 lector = csv.reader(data, delimiter=";")
-                next(lector)  # Saltamos encabezado
+                # Intentar saltar encabezado si existe
+                try:
+                    next(lector)
+                except StopIteration:
+                    pass
 
                 # construir conjunto de cédulas ya presentes para evitar duplicados
                 existing_ceds = set()
@@ -38,18 +42,25 @@ class Cargar_datos:
                         continue
 
                 for fila in lector:
+                    # Si la fila no tiene el número esperado de columnas, ignorarla
+                    if not fila or len(fila) < 16:
+                        # intentar continuar con la siguiente
+                        continue
+
+                    # Desempaquetar según el formato esperado del CSV
                     (
                         ies_id, ies_nombre, identificacion, nombres, apellidos,
                         puntaje_postulacion, prioridad, segmento, nombre_carrera,
                         campus, tipo_cupo, modalidad, nivel, jornada,
                         acepta_estado, fecha_acepta_cupo
-                    ) = fila
+                    ) = fila[:16]
 
                     cedula_from_row = str(identificacion).strip()
                     if cedula_from_row in existing_ceds:
                         # saltar duplicado del CSV respecto a lo ya cargado
                         continue
-                    # validar valores básicos
+
+                    # validar puntaje
                     try:
                         puntaje_val = float(puntaje_postulacion)
                     except Exception:
@@ -57,7 +68,7 @@ class Cargar_datos:
 
                     aspirante = Aspirante(
                         cedula=identificacion,
-                        nombre=f"{nombres} {apellidos}",
+                        nombre=f"{nombres} {apellidos}".strip(),
                         puntaje=puntaje_val,
                         grupo=segmento,
                         titulos="Bachiller",
@@ -84,15 +95,27 @@ class Cargar_datos:
                     except Exception:
                         pass
 
+                    # --- NUEVO: guardar la carrera a la que postuló el aspirante ---
+                    try:
+                        setattr(aspirante, "carrera_postulada", nombre_carrera)
+                        # Alias por compatibilidad (algunas partes del código pueden buscar nombre_carrera)
+                        setattr(aspirante, "nombre_carrera", nombre_carrera)
+                    except Exception:
+                        pass
+                    # --------------------------------------------------------------
+
                     self.aspirantes.append(aspirante)
                     existing_ceds.add(cedula_from_row)
 
-            self.ya_cargo = True # Marcamos que ya terminó
+            self.ya_cargo = True  # Marcamos que ya terminó
             return self.aspirantes
 
         except FileNotFoundError:
-            # Si no existe el CSV, devolvemos lista vacía (no marcamos ya_cargo para permitir reintentos)
+            # No existe el archivo; devolver lista vacía
+            self.ya_cargo = True
             return self.aspirantes
-        except Exception:
-            # En caso de error inesperado, relanzamos para que el llamador lo vea (o lo capture)
-            raise
+        except Exception as e:
+            # En caso de error inesperado, devolver lo que se haya cargado y loggear si lo deseas
+            print("Error cargando CSV:", e)
+            self.ya_cargo = True
+            return self.aspirantes

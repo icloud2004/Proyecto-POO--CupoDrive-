@@ -1,1 +1,18 @@
-[]
+[
+  {
+    "nombre": "poblacion general",
+    "porcentaje": 80.0,
+    "orden": 1,
+    "min_pct": null,
+    "max_pct": null,
+    "descripcion": ""
+  },
+  {
+    "nombre": "politica de cuotas",
+    "porcentaje": 20.0,
+    "orden": 2,
+    "min_pct": null,
+    "max_pct": null,
+    "descripcion": ""
+  }
+]
