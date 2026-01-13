@@ -42,79 +42,25 @@ def _stable_sort(candidates):
 
 def _postulados_para_carrera(carrera, aspirantes):
     """
-    Filtra aspirantes que deben considerarse 'postulados' para una carrera.
-    - Es tolerante a diferentes claves de 'estado' en dicts/objetos.
-    - Si la carrera tiene campus/sede se intentará filtrar por campus solo si
-      al menos algunos aspirantes contienen información de campus (heurística).
+    Filtra aspirantes con estado 'Postulado' (case-insensitive).
+    Si carrera tiene campus/sede, filtra por campus si está presente en el aspirante.
     """
     out = []
-
-    # normalizar campus de la carrera (si existe)
-    campus_carrera = (getattr(carrera, "campus", None) or getattr(carrera, "sede", None) or "")
-    campus_carrera = str(campus_carrera).strip().lower() if campus_carrera else ""
-
-    # detecta si al menos algún aspirante tiene campo campus relevante
-    has_any_asp_campus = False
+    campus_carrera = getattr(carrera, "campus", None) or getattr(carrera, "sede", None)
     for a in aspirantes:
         try:
-            if isinstance(a, dict):
-                if any(a.get(k) for k in ("campus", "CAN_NOMBRE", "sede", "Sede", "SEDE")):
-                    has_any_asp_campus = True
-                    break
-            else:
-                if getattr(a, "campus", None) or getattr(a, "sede", None):
-                    has_any_asp_campus = True
-                    break
-        except Exception:
-            continue
-
-    for a in aspirantes:
-        try:
-            # aceptar múltiples claves para 'estado'
-            if isinstance(a, dict):
-                estado = (a.get("estado")
-                          or a.get("acepta_estado")
-                          or a.get("estado_postulacion")
-                          or a.get("estado_post")
-                          or a.get("status")
-                          or "")
-            else:
-                estado = (getattr(a, "estado", None)
-                          or getattr(a, "acepta_estado", None)
-                          or getattr(a, "estado_postulacion", None)
-                          or getattr(a, "status", None)
-                          or "")
-
-            estado_str = str(estado).strip().lower() if estado is not None else ""
-
-            # criterio flexible para considerar 'postulado'
-            is_postulado = False
-            if estado_str:
-                # matches por substrings comunes: postu*, inscri*, admit*
-                if "postul" in estado_str or "inscri" in estado_str or "admit" in estado_str:
-                    is_postulado = True
-                else:
-                    # lista conservadora adicional
-                    if estado_str in ("postulado", "postulacion", "inscrito", "preinscrito", "registrado"):
-                        is_postulado = True
-            # Si no hay estado y no queremos descartar por eso, NO asumimos postulado.
-            if not is_postulado:
+            estado = (a.get("estado") if isinstance(a, dict) else getattr(a, "estado", None))
+            if estado is None or str(estado).strip().lower() not in ("postulado", "postulacion", "inscrito", "postulado"):
                 continue
-
-            # Filtrar por campus sólo si la carrera tiene campus y los aspirantes
-            # efectivamente contienen campus en sus registros (para evitar filtrar todo).
-            if campus_carrera and has_any_asp_campus:
+            if campus_carrera:
                 if isinstance(a, dict):
-                    campus_asp = a.get("campus") or a.get("CAN_NOMBRE") or a.get("sede") or a.get("Sede") or ""
+                    campus_asp = a.get("campus") or a.get("CAN_NOMBRE") or ""
                 else:
                     campus_asp = getattr(a, "campus", None) or getattr(a, "sede", None) or ""
-                campus_asp = str(campus_asp).strip().lower() if campus_asp is not None else ""
-                if not campus_asp or campus_asp != campus_carrera:
+                if campus_asp is None or str(campus_asp).strip().lower() != str(campus_carrera).strip().lower():
                     continue
-
             out.append(a)
         except Exception:
-            # skip problematic entries
             continue
     return out
 
@@ -194,6 +140,13 @@ class MultiSegmentStrategy(AssignmentStrategy):
         if suma_pct <= 0:
             segmentos = [SimpleNamespace(nombre="Población general", porcentaje=100.0, orden=999)]
 
+        # crear mapa de normalización nombre_normalizado -> nombre_original
+        norm_to_original = {}
+        for s in segmentos:
+            original = getattr(s, "nombre", "") or ""
+            norm = original.strip().lower()
+            norm_to_original[norm] = original
+
         # calcular cuotas por segmento (round y ajuste)
         cuotas = []
         acc = 0
@@ -220,50 +173,93 @@ class MultiSegmentStrategy(AssignmentStrategy):
 
         # mapear pertenencia de aspirantes a segmentos (si no tiene -> Población general)
         def aspirante_segment_members(asp):
+            """
+            Devuelve lista de memberships normalizados (lower stripped).
+            Acepta dict u objeto. También revisa 'grupo' (campo que se usa en Cargar_datos)
+            y algunas variantes de nombre común.
+            """
             segs = []
+
+            def _normalize_list(lst):
+                out = []
+                for x in lst:
+                    if x is None:
+                        continue
+                    s = str(x).strip()
+                    if s == "":
+                        continue
+                    out.append(s)
+                return out
+
             if isinstance(asp, dict):
+                # prioridades: 'segmentos' (lista), 'segmento', 'grupo'
                 if "segmentos" in asp and isinstance(asp["segmentos"], list):
-                    segs = [str(x).strip() for x in asp["segmentos"] if x]
+                    segs = _normalize_list(asp["segmentos"])
                 else:
-                    v = str(asp.get("segmento") or "").strip()
+                    v = asp.get("segmento") or asp.get("grupo") or asp.get("grupo_nombre") or asp.get("grup")
                     if v:
-                        segs = [v]
+                        # si viene con separador posible, intentar split
+                        if isinstance(v, str) and ("," in v or ";" in v):
+                            parts = [p.strip() for p in v.replace(";", ",").split(",") if p.strip()]
+                            segs = _normalize_list(parts)
+                        else:
+                            segs = [str(v).strip()]
             else:
+                # objeto: chequeamos atributos comunes
                 v = getattr(asp, "segmentos", None)
                 if isinstance(v, list):
-                    segs = [str(x).strip() for x in v if x]
+                    segs = _normalize_list(v)
                 else:
-                    v2 = getattr(asp, "segmento", None)
-                    if v2 is not None:
-                        segs = [str(v2).strip()]
-            if not segs:
-                return ["Población general"]
-            return segs
+                    v2 = getattr(asp, "segmento", None) or getattr(asp, "grupo", None) or getattr(asp, "grupo_nombre", None)
+                    if v2:
+                        if isinstance(v2, str) and ("," in v2 or ";" in v2):
+                            parts = [p.strip() for p in v2.replace(";", ",").split(",") if p.strip()]
+                            segs = _normalize_list(parts)
+                        else:
+                            segs = [str(v2).strip()]
+
+            # Normalizar a lower para comparaciones
+            segs_norm = [s.strip().lower() for s in segs if s and str(s).strip() != ""]
+            if not segs_norm:
+                return ["población general"]
+            return segs_norm
 
         # seleccionar segmento inicial (el de menor orden que coincida)
         aspirante_chosen_segment = {}
         for a in postulados:
-            memberships = aspirante_segment_members(a)
-            chosen = None
+            memberships = aspirante_segment_members(a)  # ya normalizados lower
+            chosen_norm = None
             for s in segmentos:
-                nombre_s = getattr(s, "nombre", "")
-                if nombre_s in memberships or nombre_s.strip().lower() in [m.strip().lower() for m in memberships]:
-                    chosen = nombre_s
+                nombre_s = getattr(s, "nombre", "") or ""
+                nombre_s_norm = nombre_s.strip().lower()
+                # comparar normalizados
+                if nombre_s_norm in memberships:
+                    chosen_norm = nombre_s_norm
                     break
-            if not chosen:
-                chosen = "Población general"
+                # también comparar el original si memberships contienen textos no normalizados
+                if nombre_s in memberships:
+                    chosen_norm = nombre_s_norm
+                    break
+            if not chosen_norm:
+                chosen_norm = "población general"
             key = a if isinstance(a, dict) else id(a)
-            aspirante_chosen_segment[key] = chosen
+            aspirante_chosen_segment[key] = chosen_norm
 
-        # construir pools por segmento
+        # construir pools por segmento (usar nombres originales como claves)
         candidates_per_segment = {getattr(s, "nombre", ""): [] for s in segmentos}
+        # asegurar existencia de 'Población general' clave si no existe
+        if "Población general" not in candidates_per_segment:
+            candidates_per_segment.setdefault("Población general", [])
+
         for a in postulados:
             key = a if isinstance(a, dict) else id(a)
-            chosen = aspirante_chosen_segment.get(key)
-            if chosen not in candidates_per_segment:
+            chosen_norm = aspirante_chosen_segment.get(key)
+            original_name = norm_to_original.get(chosen_norm, None)
+            if original_name is None or original_name not in candidates_per_segment:
+                # fallback a Población general
                 candidates_per_segment.setdefault("Población general", []).append(a)
             else:
-                candidates_per_segment[chosen].append(a)
+                candidates_per_segment[original_name].append(a)
 
         # ordenar cada pool
         for k in list(candidates_per_segment.keys()):

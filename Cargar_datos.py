@@ -88,13 +88,11 @@ class Cargar_datos:
                     existing_ceds.add(cedula_from_row)
 
             self.ya_cargo = True # Marcamos que ya terminó
-            print(f"Éxito: {len(self.aspirantes)} aspirantes listos.")
             return self.aspirantes
 
         except FileNotFoundError:
-            print("Error: El archivo no existe.")
-            return []
-
-# --- Cómo se usa ahora ---
-instancia = Cargar_datos.obtener_instancia()
-lista_aspirantes = instancia.cargar()
+            # Si no existe el CSV, devolvemos lista vacía (no marcamos ya_cargo para permitir reintentos)
+            return self.aspirantes
+        except Exception:
+            # En caso de error inesperado, relanzamos para que el llamador lo vea (o lo capture)
+            raise
