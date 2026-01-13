@@ -1,2 +1,596 @@
 [
+  {
+    "cedula": "223450001",
+    "nombre": "Luis Alberto Muñoz Cedeño",
+    "puntaje": 780.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450002",
+    "nombre": "María José Loor Zambrano",
+    "puntaje": 820.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450003",
+    "nombre": "Carlos Andrés Ponce Macías",
+    "puntaje": 690.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450004",
+    "nombre": "Daniela Sofía Vera Giler",
+    "puntaje": 910.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450005",
+    "nombre": "José Miguel Solórzano Cedeño",
+    "puntaje": 740.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450006",
+    "nombre": "Paula Andrea Pincay Loor",
+    "puntaje": 830.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450007",
+    "nombre": "Kevin Alexander Zambrano Vélez",
+    "puntaje": 755.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450008",
+    "nombre": "Andrea Michelle Moreira Cantos",
+    "puntaje": 900.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450009",
+    "nombre": "Jonathan David Anchundia Pico",
+    "puntaje": 660.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450010",
+    "nombre": "Valeria Isabel Reyes Suárez",
+    "puntaje": 845.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450011",
+    "nombre": "Fernando José Cañarte Mendoza",
+    "puntaje": 790.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450012",
+    "nombre": "Lucía Fernanda Guerrero Mero",
+    "puntaje": 880.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450013",
+    "nombre": "Diego Armando Villacís Rojas",
+    "puntaje": 710.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450014",
+    "nombre": "Katherine Nicole Macías Solórzano",
+    "puntaje": 930.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450015",
+    "nombre": "Bryan Eduardo Saltos Anchundia",
+    "puntaje": 680.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450016",
+    "nombre": "Samantha Alejandra Párraga Vélez",
+    "puntaje": 870.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450017",
+    "nombre": "Juan Pablo Delgado Ponce",
+    "puntaje": 795.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450018",
+    "nombre": "Natalia Belén Rosales Pincay",
+    "puntaje": 905.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450019",
+    "nombre": "Miguel Ángel Cedeño Bravo",
+    "puntaje": 760.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450020",
+    "nombre": "Andrea Paola Suárez Cantos",
+    "puntaje": 820.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450021",
+    "nombre": "Roberto Javier Menéndez Castillo",
+    "puntaje": 700.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450022",
+    "nombre": "Melissa Andrea Zamora Intriago",
+    "puntaje": 890.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450023",
+    "nombre": "Oscar Felipe García Cantos",
+    "puntaje": 770.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450024",
+    "nombre": "Carla Verónica Pinargote Macías",
+    "puntaje": 940.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450025",
+    "nombre": "Henry Leonardo Mendoza Plaza",
+    "puntaje": 680.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450026",
+    "nombre": "Rosa Elena Guadamud Plaza",
+    "puntaje": 835.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450027",
+    "nombre": "Cristian Joel Santana Mendoza",
+    "puntaje": 790.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450028",
+    "nombre": "Daniela Carolina Briones Pico",
+    "puntaje": 880.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450029",
+    "nombre": "Sebastián Andrés Reinoso Pincay",
+    "puntaje": 750.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450030",
+    "nombre": "Pamela Beatriz Caguana Vera",
+    "puntaje": 910.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450031",
+    "nombre": "Ricardo Daniel Morejón Figueroa",
+    "puntaje": 805.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450032",
+    "nombre": "Tatiana Alexandra Mero Villao",
+    "puntaje": 870.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450033",
+    "nombre": "Pablo Esteban Cantos Solórzano",
+    "puntaje": 720.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450034",
+    "nombre": "María Fernanda Reyes Macías",
+    "puntaje": 900.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450035",
+    "nombre": "Luis Fernando Vera Intriago",
+    "puntaje": 760.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450036",
+    "nombre": "Gabriela Rocío Palacios Castro",
+    "puntaje": 830.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450037",
+    "nombre": "Andrés Felipe Morales Paredes",
+    "puntaje": 795.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450038",
+    "nombre": "Lorena Patricia Loor Arteaga",
+    "puntaje": 910.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450039",
+    "nombre": "Iván Mauricio Suárez Cañizares",
+    "puntaje": 740.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450040",
+    "nombre": "Claudia Beatriz Cagua Mendoza",
+    "puntaje": 880.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450041",
+    "nombre": "Marco Vinicio Pinargote Macías",
+    "puntaje": 755.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450042",
+    "nombre": "Vanessa Estefanía Giler Parrales",
+    "puntaje": 900.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450043",
+    "nombre": "Héctor Julián Mendieta Chávez",
+    "puntaje": 770.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450045",
+    "nombre": "Wilmer Antonio Zamora Cañarte",
+    "puntaje": 720.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450046",
+    "nombre": "Yessenia Maribel Rodríguez Villacís",
+    "puntaje": 880.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450047",
+    "nombre": "Jorge Armando Menéndez Castillo",
+    "puntaje": 790.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450048",
+    "nombre": "Rocío Gabriela Cañarte Palma",
+    "puntaje": 910.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450049",
+    "nombre": "Nelson Patricio Villacís Rojas",
+    "puntaje": 750.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450050",
+    "nombre": "Maritza Elena Arévalo Saltos",
+    "puntaje": 900.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450051",
+    "nombre": "Alexis Renato Vallejos Pisco",
+    "puntaje": 730.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450052",
+    "nombre": "Mónica Patricia Guadamud Plaza",
+    "puntaje": 860.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450053",
+    "nombre": "Darwin Esteban Briones Pico",
+    "puntaje": 780.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450054",
+    "nombre": "Noelia Fernanda Reinoso Pincay",
+    "puntaje": 905.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450055",
+    "nombre": "Edison Mauricio Caguana Vera",
+    "puntaje": 760.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450056",
+    "nombre": "Diana Lorena Morejón Figueroa",
+    "puntaje": 880.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450057",
+    "nombre": "Raúl Andrés Mero Villao",
+    "puntaje": 720.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450058",
+    "nombre": "Karla Verónica Cantos Solórzano",
+    "puntaje": 910.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450059",
+    "nombre": "Mauricio Xavier Reyes Macías",
+    "puntaje": 770.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450060",
+    "nombre": "Patricia Elena Vera Intriago",
+    "puntaje": 900.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450061",
+    "nombre": "Julio César Palacios Castro",
+    "puntaje": 760.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450062",
+    "nombre": "Stefany Alejandra Morales Paredes",
+    "puntaje": 880.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450063",
+    "nombre": "Robinson David Loor Arteaga",
+    "puntaje": 740.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450064",
+    "nombre": "Milena Rocío Suárez Cañizares",
+    "puntaje": 900.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450065",
+    "nombre": "Jhonatan Israel Cagua Mendoza",
+    "puntaje": 770.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450066",
+    "nombre": "Fabiola Maritza Pinargote Macías",
+    "puntaje": 880.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450067",
+    "nombre": "Luis Alfredo Giler Parrales",
+    "puntaje": 750.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450068",
+    "nombre": "Katherine Dayana Mendieta Chávez",
+    "puntaje": 910.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450069",
+    "nombre": "Freddy Eduardo Bravo Intriago",
+    "puntaje": 720.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450070",
+    "nombre": "María Teresa Zamora Cañarte",
+    "puntaje": 900.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450071",
+    "nombre": "Christian Javier Rodríguez Villacís",
+    "puntaje": 760.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450072",
+    "nombre": "Jessica Pamela Menéndez Castillo",
+    "puntaje": 880.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450073",
+    "nombre": "Hugo Rafael Cañarte Palma",
+    "puntaje": 740.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450074",
+    "nombre": "Nataly Karina Villacís Rojas",
+    "puntaje": 905.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450075",
+    "nombre": "Oscar Danilo Arévalo Saltos",
+    "puntaje": 770.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450076",
+    "nombre": "Mayra Elizabeth Vallejos Pisco",
+    "puntaje": 880.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450077",
+    "nombre": "Ronald Patricio Guadamud Plaza",
+    "puntaje": 760.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450078",
+    "nombre": "Andrea Milagros Briones Pico",
+    "puntaje": 910.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450079",
+    "nombre": "Wilian Eduardo Reinoso Pincay",
+    "puntaje": 740.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450080",
+    "nombre": "Marjorie Alejandra Caguana Vera",
+    "puntaje": 900.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450081",
+    "nombre": "Darío Antonio Morejón Figueroa",
+    "puntaje": 760.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450082",
+    "nombre": "Silvia Cristina Mero Villao",
+    "puntaje": 880.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450083",
+    "nombre": "Luis Eduardo Cantos Solórzano",
+    "puntaje": 750.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450084",
+    "nombre": "Tatiana Fernanda Reyes Macías",
+    "puntaje": 910.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450085",
+    "nombre": "Kevin Mauricio Vera Intriago",
+    "puntaje": 760.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450086",
+    "nombre": "Angélica Maribel Palacios Castro",
+    "puntaje": 880.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450087",
+    "nombre": "Ernesto Javier Morales Paredes",
+    "puntaje": 740.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450088",
+    "nombre": "Clara Juliana Loor Arteaga",
+    "puntaje": 905.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450089",
+    "nombre": "Gustavo Andrés Suárez Cañizares",
+    "puntaje": 760.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450090",
+    "nombre": "Elena Patricia Cagua Mendoza",
+    "puntaje": 900.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450091",
+    "nombre": "Raúl Vinicio Pinargote Macías",
+    "puntaje": 750.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450092",
+    "nombre": "Paola Fernanda Giler Parrales",
+    "puntaje": 880.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450093",
+    "nombre": "Eduardo Miguel Mendieta Chávez",
+    "puntaje": 760.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450094",
+    "nombre": "Ruth Alexandra Bravo Intriago",
+    "puntaje": 905.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450095",
+    "nombre": "Javier Esteban Zamora Cañarte",
+    "puntaje": 740.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450096",
+    "nombre": "Marlene Rocío Rodríguez Villacís",
+    "puntaje": 900.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450097",
+    "nombre": "Luis Enrique Menéndez Castillo",
+    "puntaje": 760.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450098",
+    "nombre": "Johanna Karina Cañarte Palma",
+    "puntaje": 880.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450099",
+    "nombre": "Ángel Gabriel Villacís Rojas",
+    "puntaje": 750.0,
+    "estado": "Postulado"
+  },
+  {
+    "cedula": "223450100",
+    "nombre": "Mireya Guadalupe Arévalo Saltos",
+    "puntaje": 900.0,
+    "estado": "Postulado"
+  }
 ]
