@@ -1,11 +1,119 @@
 # app_web.py (versión corregida: carga robusta de Asignacion_cupos, registro seguro de inicialización)
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify, abort, render_template_string
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify, abort, render_template_string, send_file
 import os
 import traceback
 import json
 import glob
 import importlib
 import importlib.util
+import pandas as pd
+import json
+import os
+from flask import send_file
+from datetime import datetime
+
+import os
+
+DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
+
+ASPIRANTES_PATH = os.path.join(DATA_DIR, "aspirantes.json")
+CUPOS_PATH = os.path.join(DATA_DIR, "cupos.json")
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+CUPOS_PATH = os.path.join(DATA_DIR, "cupos.json")
+SEGMENTOS_PATH = os.path.join(DATA_DIR, "segmentos.json")
+SEGMENTOS_GLOBALES_PATH = os.path.join(DATA_DIR, "segmentos_globales.json")
+
+CARRERAS_PATH = os.path.join(BASE_DIR, "carreras.csv")
+
+
+def cargar_carreras_csv():
+    carreras = {}
+    with open("Carreras.csv", encoding="utf-8") as f:
+        encabezado = f.readline().strip().split(";")
+        for linea in f:
+            datos = linea.strip().split(";")
+            fila = dict(zip(encabezado, datos))
+            carreras[fila["CUS_ID"]] = fila
+    return carreras
+
+
+def generar_excel_asignaciones():
+
+    # ---- Cargar JSON reales ----
+    with open(ASPIRANTES_PATH, encoding="utf-8") as f:
+        aspirantes = json.load(f)
+
+    with open(CUPOS_PATH, encoding="utf-8") as f:
+        cupos = json.load(f)
+
+    aspirantes_index = {a["cedula"]: a for a in aspirantes}
+
+    carreras = cargar_carreras_csv()   # Debe devolver dict por CUS_ID
+
+    filas = []
+
+    for cupo in cupos:
+        cedula = cupo.get("aspirante_cedula")
+
+        if not cedula:
+            continue  # cupo sin estudiante asignado
+
+        aspirante = aspirantes_index.get(str(cedula))
+        if not aspirante:
+            continue
+
+        cus_id = str(cupo.get("id_cupo"))
+        carrera = carreras.get(str(cupo.get("carrera_id")), {})
+
+        nombre = aspirante.get("nombre", "")
+        partes = nombre.split(" ", 1)
+
+        apellidos = partes[0] if len(partes) > 0 else ""
+        nombres = partes[1] if len(partes) > 1 else ""
+
+        segmento = aspirante.get("segmento", "").lower()
+
+        fila = {
+            "ID": cupo.get("id_cupo"),
+            "AÑO": "",
+            "PERIODO": "",
+            "SEDE UNIVERSIDAD": carrera.get("CAN_NOMBRE",""),
+            "CARRERA": carrera.get("CAR_NOMBRE_CARRERA",""),
+            "JORNADA": carrera.get("JORNADA",""),
+            "MODALIDAD": carrera.get("MODALIDAD",""),
+            "CAMPO AMPLIO": carrera.get("AREA_NOMBRE",""),
+            "NIVEL": carrera.get("NIVEL",""),
+            "FACULTAD": carrera.get("SUBAREA_NOMBRE",""),
+            "TIPO DE OFERTA": segmento,
+            "ID OFERTA UNIVERSIDAD": carrera.get("OFA_ID",""),
+            "CUS ID": carrera.get("CUS_ID",""),
+            "POLITICA DE CUOTA": 1 if segmento == "politica" else 0,
+            "IDENTIFICACION": aspirante.get("cedula"),
+            "APELLIDOS": apellidos,
+            "NOMBRES": nombres,
+            "SEXO": aspirante.get("sexo",""),
+            "NOTA UNIVERSIDAD": aspirante.get("puntaje"),
+            "NOTA POSTULACION": aspirante.get("puntaje"),
+            "ORDEN PRIORIDAD": aspirante.get("prioridad"),
+            "VULNERABILIDAD SOCIOECONOMICA": "SI" if aspirante.get("vulnerabilidad","") not in ["", "Ninguna", None] else "NO",
+            "POBLACION GENERAL": "SI" if segmento == "general" else "NO",
+            "ESTADO DE POSTULACION": segmento,
+            "ESTADO DE CUPO": cupo.get("estado")
+        }
+
+        filas.append(fila)
+
+    if not filas:
+        raise Exception("No existen cupos asignados para generar el reporte")
+
+    df = pd.DataFrame(filas)
+
+    nombre_archivo = f"reporte_cupos_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    df.to_excel(nombre_archivo, index=False)
+
+    return nombre_archivo
 
 # Intentar importar cargadores con varios nombres posibles (repos pueden variar)
 try:
@@ -893,6 +1001,26 @@ def _register_load_default_data_once():
         load_default_data_once()
     except Exception:
         traceback.print_exc()
+        
+@app.route("/admin/report", methods=["POST"])
+def admin_report():
+    try:
+        archivo = generar_excel_asignaciones()
+
+        # Verificamos que el archivo exista
+        if not os.path.exists(archivo):
+            return {"error": "No se pudo generar el archivo de reporte"}, 500
+
+        return send_file(
+            archivo,
+            as_attachment=True,
+            download_name=archivo,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
+    except Exception as e:
+        print("Error generando reporte:", e)
+        return {"error": str(e)}, 500
 
 # Ejecutar el registro robusto ahora que la función existe
 _register_load_default_data_once()

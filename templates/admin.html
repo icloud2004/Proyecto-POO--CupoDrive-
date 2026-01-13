@@ -33,33 +33,50 @@
           <li class="nav-item"><a href="#" class="nav-link" id="menuAspirantes">Ver Aspirantes</a></li>
         </ul>
       </div>
+<div class="content flex-fill">
+  <!-- Upload panel -->
+  <div id="panelUpload">
+    <h4>Subir archivos CSV</h4>
 
-      <div class="content flex-fill">
-        <!-- Upload panel -->
-        <div id="panelUpload">
-          <h4>Subir archivos CSV</h4>
-          <form id="uploadForm">
-            <div class="mb-3">
-              <label class="form-label">Archivo aspirantes (BaseDatos.csv)</label>
-              <input id="fileAspirantes" name="aspirantes" type="file" class="form-control" accept=".csv">
-            </div>
-            <div class="mb-3">
-              <label class="form-label">Archivo carreras (Carreras.csv)</label>
-              <input id="fileCarreras" name="carreras" type="file" class="form-control" accept=".csv">
-            </div>
+    <form id="uploadForm">
+      <div class="mb-3">
+        <label class="form-label">Archivo aspirantes (BaseDatos.csv)</label>
+        <input id="fileAspirantes" name="aspirantes" type="file" class="form-control" accept=".csv">
+      </div>
 
-            <div class="mb-3">
-              <button id="btnManageGlobalSegments" type="button" class="btn btn-outline-warning">Gestionar segmentos globales</button>
-              <div class="form-text">Los segmentos globales aplican a todas las carreras (suma debe ser 100%).</div>
-            </div>
+      <div class="mb-3">
+        <label class="form-label">Archivo carreras (Carreras.csv)</label>
+        <input id="fileCarreras" name="carreras" type="file" class="form-control" accept=".csv">
+      </div>
 
-            <button id="btnUpload" type="button" class="btn btn-primary">Subir y cargar</button>
-            <span class="mx-2"></span>
-            <button id="btnAssignAll" type="button" class="btn btn-success">Asignar cupos automáticamente</button>
-            <button id="btnReport" type="button" class="btn btn-outline-secondary">Generar reporte</button>
-          </form>
-          <hr>
+      <div class="mb-3">
+        <button id="btnManageGlobalSegments" type="button" class="btn btn-outline-warning">
+          Gestionar segmentos globales
+        </button>
+        <div class="form-text">
+          Los segmentos globales aplican a todas las carreras (suma debe ser 100%).
         </div>
+      </div>
+
+      <button id="btnUpload" type="button" class="btn btn-primary">
+        Subir y cargar
+      </button>
+
+      <span class="mx-2"></span>
+
+      <button id="btnAssignAll" type="button" class="btn btn-success">
+        Asignar cupos automáticamente
+      </button>
+
+      <button id="btnReport" type="button" class="btn btn-outline-secondary">
+        Generar reporte
+      </button>
+
+    </form>
+
+    <hr>
+  </div>
+</div>
 
         <!-- Cupos panel -->
         <div id="panelCupos" style="display:none;">
@@ -575,3 +592,28 @@
     </script>
   </body>
 </html>
+
+<script>
+document.getElementById("btnReport").addEventListener("click", () => {
+    fetch("/admin/report", {
+        method: "POST"
+    })
+    .then(res => {
+        if (!res.ok) throw new Error("Error generando reporte");
+        return res.blob();
+    })
+    .then(blob => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "reporte_cupos.xlsx";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+    })
+    .catch(err => {
+        alert("Error: " + err.message);
+    });
+});
+</script>
