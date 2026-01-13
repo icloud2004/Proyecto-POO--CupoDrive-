@@ -1,5 +1,5 @@
 # app_web.py (versión corregida: carga robusta de Asignacion_cupos, registro seguro de inicialización)
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify, abort
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify, abort, render_template_string
 import os
 import traceback
 import json
@@ -386,6 +386,125 @@ def admin_assign_all():
         print("Advertencia: no se pudo guardar cupos tras asignación:", e)
 
     return jsonify({"ok": True, "resultados": resultados})
+
+# ---------------------------
+# RUTAS PARA ESTUDIANTE (implementadas)
+# ---------------------------
+@app.route("/student")
+@login_required(role=None)
+def student_dashboard():
+    # Asegurarnos que el usuario no sea admin
+    user = session.get("user", {})
+    if user.get("role") == "admin":
+        return redirect("/admin")
+    cedula = user.get("username")
+    aspirante = find_aspirante_by_cedula(cedula)
+    if aspirante is None:
+        # Mostrar mensaje amigable en vez de 404
+        return render_template("login.html", error="No se encontró información del estudiante. Contacta al administrador.")
+    # pasar datos al template 'estudiante.html' (la plantilla ya existe)
+    # si el aspirante es objeto, intentar construir un dict simple que la plantilla entienda
+    try:
+        if isinstance(aspirante, dict):
+            aspir_data = aspirante
+        else:
+            aspir_data = {
+                "cedula": getattr(aspirante, "cedula", ""),
+                "nombre": getattr(aspirante, "nombre", ""),
+                "puntaje": getattr(aspirante, "puntaje", ""),
+                "estado": getattr(aspirante, "estado", ""),
+                "carrera_asignada": getattr(aspirante, "carrera_asignada", None)
+            }
+    except Exception:
+        aspir_data = {}
+    return render_template("estudiante.html", user=user, aspirante=aspirante if not isinstance(aspirante, dict) else aspir_data)
+
+@app.route("/student/cupo/accept", methods=["POST"])
+@login_required(role=None)
+def student_accept_cupo():
+    user = session.get("user", {})
+    cedula = user.get("username")
+    aspirante = find_aspirante_by_cedula(cedula)
+    if aspirante is None:
+        return jsonify({"error": "Aspirante no encontrado"}), 404
+    # Lógica de aceptar cupo (ajusta campos según tu modelo)
+    try:
+        if isinstance(aspirante, dict):
+            aspirante["estado"] = "Aceptado"
+        else:
+            setattr(aspirante, "estado", "Aceptado")
+        # persistir cambios si existe la función
+        try:
+            save_aspirantes(aspirantes_list)
+        except Exception:
+            pass
+        report_url = url_for("student_report", cedula=str(cedula))
+        return jsonify({"ok": True, "report_url": report_url})
+    except Exception as e:
+        return jsonify({"error": f"Error aceptando cupo: {e}"}), 500
+
+@app.route("/student/cupo/reject", methods=["POST"])
+@login_required(role=None)
+def student_reject_cupo():
+    user = session.get("user", {})
+    cedula = user.get("username")
+    aspirante = find_aspirante_by_cedula(cedula)
+    if aspirante is None:
+        return jsonify({"error": "Aspirante no encontrado"}), 404
+    try:
+        if isinstance(aspirante, dict):
+            aspirante["estado"] = "Rechazado"
+            aspirante["carrera_asignada"] = None
+        else:
+            setattr(aspirante, "estado", "Rechazado")
+            if hasattr(aspirante, "carrera_asignada"):
+                setattr(aspirante, "carrera_asignada", None)
+        try:
+            save_aspirantes(aspirantes_list)
+        except Exception:
+            pass
+        return jsonify({"ok": True, "message": "Cupo rechazado."})
+    except Exception as e:
+        return jsonify({"error": f"Error rechazando cupo: {e}"}), 500
+
+@app.route("/student/reporte/<cedula>")
+@login_required(role=None)
+def student_report(cedula):
+    aspirante = find_aspirante_by_cedula(cedula)
+    if aspirante is None:
+        return render_template("login.html", error="Reporte: aspirante no encontrado")
+    # Intentar renderizar plantilla 'reporte.html' si existe; si no, renderizar HTML simple
+    try:
+        return render_template("reporte.html", aspirante=aspirante, user=session.get("user", {}))
+    except Exception:
+        # plantilla no existe, devolver HTML sencillo
+        try:
+            if isinstance(aspirante, dict):
+                ced = aspirante.get("cedula", "")
+                nombre = aspirante.get("nombres") or aspirante.get("nombre") or ""
+                estado = aspirante.get("estado", "")
+                carrera = aspirante.get("carrera_asignada") or ""
+                puntaje = aspirante.get("puntaje") or ""
+            else:
+                ced = getattr(aspirante, "cedula", "")
+                nombre = getattr(aspirante, "nombre", "")
+                estado = getattr(aspirante, "estado", "")
+                carrera = getattr(aspirante, "carrera_asignada", "") or ""
+                puntaje = getattr(aspirante, "puntaje", "")
+            html = f"""
+            <html><head><meta charset='utf-8'><title>Reporte de {nombre}</title></head>
+            <body>
+              <h2>Reporte de aspirante</h2>
+              <p><strong>Cédula:</strong> {ced}</p>
+              <p><strong>Nombre:</strong> {nombre}</p>
+              <p><strong>Puntaje:</strong> {puntaje}</p>
+              <p><strong>Estado:</strong> {estado}</p>
+              <p><strong>Carrera asignada:</strong> {carrera}</p>
+            </body></html>
+            """
+            return render_template_string(html)
+        except Exception:
+            return "Reporte no disponible", 500
 
 # ---------------------------
 # API endpoints (admin)
