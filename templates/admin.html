@@ -49,14 +49,34 @@
         <input id="fileCarreras" name="carreras" type="file" class="form-control" accept=".csv">
       </div>
 
-      <div class="mb-3">
-        <button id="btnManageGlobalSegments" type="button" class="btn btn-outline-warning">
-          Gestionar segmentos globales
-        </button>
-        <div class="form-text">
-          Los segmentos globales aplican a todas las carreras (suma debe ser 100%).
-        </div>
-      </div>
+<div class="mb-3">
+  <button id="btnManageGlobalSegments" type="button" class="btn btn-outline-warning">
+    Gestionar segmentos globales
+  </button>
+  <div class="form-text">
+    Los segmentos globales aplican a todas las carreras (suma debe ser 100%).
+  </div>
+</div>
+
+<hr>
+
+<h6 class="mt-3">Período académico activo</h6>
+
+<div class="row g-2 mb-3">
+  <div class="col-md-3">
+    <input id="periodoAnio" class="form-control" placeholder="Año (ej. 2025)">
+  </div>
+
+  <div class="col-md-5">
+    <input id="periodoNombre" class="form-control" placeholder="Período (ej. Primer Semestre)">
+  </div>
+
+  <div class="col-md-2">
+    <button id="btnGuardarPeriodo" type="button" class="btn btn-outline-primary">
+      Guardar período
+    </button>
+  </div>
+</div>
 
       <button id="btnUpload" type="button" class="btn btn-primary">
         Subir y cargar
@@ -616,4 +636,32 @@ document.getElementById("btnReport").addEventListener("click", () => {
         alert("Error: " + err.message);
     });
 });
+
+async function cargarPeriodo() {
+  try {
+    const p = await api('/api/periodo');
+    document.getElementById('periodoAnio').value = p.anio || '';
+    document.getElementById('periodoNombre').value = p.periodo || '';
+  } catch (e) {}
+}
+
+document.getElementById('btnGuardarPeriodo').addEventListener('click', async () => {
+  const anio = document.getElementById('periodoAnio').value;
+  const periodo = document.getElementById('periodoNombre').value;
+
+  try {
+    await api('/admin/periodo', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ anio, periodo })
+    });
+    alert("Período guardado correctamente");
+  } catch (e) {
+    alert(e.message);
+  }
+});
+
+cargarPeriodo();
+
 </script>
+

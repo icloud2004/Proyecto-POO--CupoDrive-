@@ -1,7 +1,7 @@
 [
   {
-    "nombre": "poblacion general",
-    "porcentaje": 50.0,
+    "nombre": "poblacion",
+    "porcentaje": 80.0,
     "orden": 1,
     "min_pct": null,
     "max_pct": null,
@@ -9,7 +9,7 @@
   },
   {
     "nombre": "politica de cuotas",
-    "porcentaje": 50.0,
+    "porcentaje": 20.0,
     "orden": 2,
     "min_pct": null,
     "max_pct": null,

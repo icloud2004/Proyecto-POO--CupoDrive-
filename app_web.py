@@ -38,7 +38,6 @@ def cargar_carreras_csv():
             carreras[fila["CUS_ID"]] = fila
     return carreras
 
-
 def generar_excel_asignaciones():
 
     # ---- Cargar JSON reales ----
@@ -47,6 +46,13 @@ def generar_excel_asignaciones():
 
     with open(CUPOS_PATH, encoding="utf-8") as f:
         cupos = json.load(f)
+
+    # ---- Cargar periodo académico activo ----
+    with open("data/periodo_activo.json", encoding="utf-8") as f:
+        periodo = json.load(f)
+
+    anio = periodo.get("anio", "")
+    periodo_nombre = periodo.get("periodo", "")
 
     aspirantes_index = {a["cedula"]: a for a in aspirantes}
 
@@ -77,8 +83,8 @@ def generar_excel_asignaciones():
 
         fila = {
             "ID": cupo.get("id_cupo"),
-            "AÑO": "",
-            "PERIODO": "",
+            "AÑO": anio,
+            "PERIODO": periodo_nombre,
             "SEDE UNIVERSIDAD": carrera.get("CAN_NOMBRE",""),
             "CARRERA": carrera.get("CAR_NOMBRE_CARRERA",""),
             "JORNADA": carrera.get("JORNADA",""),
@@ -114,6 +120,24 @@ def generar_excel_asignaciones():
     df.to_excel(nombre_archivo, index=False)
 
     return nombre_archivo
+
+PERIODO_FILE = "data/periodo_activo.json"
+
+def cargar_periodo():
+    if not os.path.exists(PERIODO_FILE):
+        return {"anio": "", "periodo": "", "codigo": ""}
+    with open(PERIODO_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+def guardar_periodo(anio, periodo):
+    data = {
+        "anio": anio,
+        "periodo": periodo,
+        "codigo": f"{anio}{periodo[0].upper()}"
+    }
+    with open(PERIODO_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=4, ensure_ascii=False)
+
 
 # Intentar importar cargadores con varios nombres posibles (repos pueden variar)
 try:
@@ -1021,6 +1045,22 @@ def admin_report():
     except Exception as e:
         print("Error generando reporte:", e)
         return {"error": str(e)}, 500
+
+@app.route("/admin/periodo", methods=["POST"])
+def set_periodo():
+    data = request.json
+    anio = data.get("anio")
+    periodo = data.get("periodo")
+
+    if not anio or not periodo:
+        return {"error": "Datos incompletos"}, 400
+
+    guardar_periodo(anio, periodo)
+    return {"ok": True}
+
+@app.route("/api/periodo", methods=["GET"])
+def get_periodo():
+    return cargar_periodo()
 
 # Ejecutar el registro robusto ahora que la función existe
 _register_load_default_data_once()
