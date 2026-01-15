@@ -461,6 +461,7 @@ def admin_upload():
 
 @app.route("/admin/assign", methods=["POST"])
 @login_required(role="admin")
+
 def admin_assign_all():
     global Asignacion_cupo, MultiSegmentStrategy
 
@@ -641,6 +642,45 @@ def student_report(cedula):
 # ---------------------------
 # API endpoints (admin)
 # ---------------------------
+@app.route("/api/carreras/<carrera_id>/update_oferta", methods=["POST"])
+@login_required(role="admin")
+def api_actualizar_cupos_carrera(carrera_id):
+    """
+    Endpoint para actualizar la cantidad de cupos de una carrera.
+    """
+    try:
+        # Obtener solicitud de datos
+        data = request.get_json()
+        nueva_oferta = data.get("nueva_oferta")
+
+        if nueva_oferta is None or not isinstance(nueva_oferta, int) or nueva_oferta < 0:
+            return jsonify({"error": "El valor para la nueva oferta es inválido"}), 400
+
+        # Buscar la carrera por ID
+        carrera = next((c for c in carreras_list if str(c.id_carrera) == str(carrera_id)), None)
+
+        if not carrera:
+            return jsonify({"error": f"No se pudo encontrar la carrera con ID {carrera_id}"}), 404
+
+        # Actualizar la oferta de cupos
+        carrera.actualizar_oferta(nueva_oferta)
+
+        # Guardar cambios en la base de datos o persistencia
+        repo = ensure_repo()
+        if repo:
+            repo.save_all()
+        else:
+            save_cupos(carreras_list)
+
+        return jsonify({"ok": True, "mensaje": f"Cupos para carrera {carrera.nombre} actualizados con éxito."})
+
+    except ValueError as ve:
+        return jsonify({"error": str(ve)}), 400
+
+    except Exception as e:
+        print(f"Error al actualizar cupos de la carrera {carrera_id}: ", e)
+        return jsonify({"error": "Error interno del servidor"}), 500
+    
 @app.route("/api/carreras", methods=["GET"])
 @login_required(role="admin")
 def api_carreras():
