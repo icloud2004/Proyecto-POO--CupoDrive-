@@ -1,4 +1,4 @@
-﻿IES_id;IES_nombre;identificiacion;nombres;apellidos;puntaje_postulacion;prioridad;segmento;nombre_carrera;campus;tipo_cupo;modalidad;nivel;jornada;acepta_estado;feha_acepta_cupo
+﻿IES_id;IES_nombre;identificacion;nombres;apellidos;puntaje_postulacion;prioridad;segmento;nombre_carrera;campus;tipo_cupo;modalidad;nivel;jornada;acepta_estado;feha_acepta_cupo
 102;UNIVERSIDAD LAYCA ELOY ALFARO DE MANABÍ;223450001;Luis Alberto;Muñoz Cedeño;780;1;2;Software;Manta;1;Presencial;1;Matutina;0;
 102;UNIVERSIDAD LAYCA ELOY ALFARO DE MANABÍ;223450002;María José;Loor Zambrano;820;2;2;Tecnologías de la información;Chone;1;Presencial;1;Matutina;0;
 102;UNIVERSIDAD LAYCA ELOY ALFARO DE MANABÍ;223450003;Carlos Andrés;Ponce Macías;690;2;2;Software;Carmen;1;Presencial;1;Matutina;0;

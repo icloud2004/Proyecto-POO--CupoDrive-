@@ -33,22 +33,84 @@ def _load_json(path: str):
 # ---------------------------
 def serialize_aspirante(a) -> dict:
     """
-    Convierte un aspirante (objeto o dict) en dict plano con campos clave.
-    Campos: cedula, nombre, puntaje, estado
+    Convierte un aspirante (objeto o dict) en dict plano.
+    IMPORTANTÍSIMO: NO perder campos de segmentación.
     """
     if a is None:
-        return {"cedula": "", "nombre": "", "puntaje": "", "estado": ""}
+        return {
+            "cedula": "", "nombre": "", "puntaje": "", "estado": "",
+            "segmento": "", "prioridad": "", "carrera_postulada": "", "campus": ""
+        }
+
+    def pick(d, *keys, default=""):
+        for k in keys:
+            if k in d and d[k] not in (None, ""):
+                return d[k]
+        return default
+
+    # -----------------------
+    # Aspirante como dict
+    # -----------------------
     if isinstance(a, dict):
-        ced = a.get("identificiacion") or a.get("identificacion") or a.get("cedula") or a.get("ident") or ""
-        nombre = (a.get("nombres") or a.get("nombre") or "").strip()
-        puntaje = a.get("puntaje_postulacion") or a.get("puntaje") or a.get("puntaje_post") or ""
-        estado = a.get("estado") or ""
-    else:
-        ced = getattr(a, "cedula", "") or getattr(a, "identificiacion", "") or getattr(a, "identificacion", "")
-        nombre = getattr(a, "nombre", "") or ""
-        puntaje = getattr(a, "puntaje", "")
-        estado = getattr(a, "estado", "")
-    return {"cedula": str(ced or ""), "nombre": nombre or "", "puntaje": puntaje, "estado": estado or ""}
+        ced = pick(a, "cedula", "identificacion", "identificiacion", "ident", "id", default="")
+        nombre = (pick(a, "nombre", "nombres", default="") or "").strip()
+
+        puntaje = pick(a, "puntaje_postulacion", "puntaje", "puntaje_post", default=0)
+        estado = pick(a, "estado", "acepta_estado", default="Postulado")
+
+        # 🔥 CAMPOS CLAVE
+        segmento = pick(a, "segmento", "grupo", "grupo_nombre", "segmento_slug", default="")
+        prioridad = pick(a, "prioridad", "orden_prioridad", default="")
+        carrera_post = pick(a, "carrera_postulada", "nombre_carrera", "carrera", "pro_nombre", default="")
+        campus = pick(a, "campus", "CAN_NOMBRE", "sede", default="")
+
+        return {
+            "cedula": str(ced or ""),
+            "nombre": nombre,
+            "puntaje": puntaje,
+            "estado": estado,
+            "segmento": segmento,
+            "prioridad": prioridad,
+            "carrera_postulada": carrera_post,
+            "campus": campus
+        }
+
+    # -----------------------
+    # Aspirante como objeto
+    # -----------------------
+    ced = getattr(a, "cedula", "") or getattr(a, "identificacion", "") or getattr(a, "identificiacion", "") or ""
+    nombre = (getattr(a, "nombre", "") or getattr(a, "nombres", "") or "").strip()
+    puntaje = getattr(a, "puntaje", "") or getattr(a, "puntaje_postulacion", "") or 0
+    estado = getattr(a, "estado", "") or "Postulado"
+
+    segmento = (
+        getattr(a, "segmento", None)
+        or getattr(a, "grupo", None)
+        or getattr(a, "grupo_nombre", None)
+        or getattr(a, "segmento_slug", None)
+        or ""
+    )
+    prioridad = getattr(a, "prioridad", "") or getattr(a, "orden_prioridad", "") or ""
+    carrera_post = (
+        getattr(a, "carrera_postulada", None)
+        or getattr(a, "nombre_carrera", None)
+        or getattr(a, "carrera", None)
+        or getattr(a, "pro_nombre", None)
+        or ""
+    )
+    campus = getattr(a, "campus", "") or getattr(a, "CAN_NOMBRE", "") or getattr(a, "sede", "") or ""
+
+    return {
+        "cedula": str(ced or ""),
+        "nombre": nombre,
+        "puntaje": puntaje,
+        "estado": estado,
+        "segmento": segmento,
+        "prioridad": prioridad,
+        "carrera_postulada": carrera_post,
+        "campus": campus
+    }
+
 
 def serialize_aspirantes_list(aspirantes_list: List) -> List[dict]:
     return [serialize_aspirante(a) for a in aspirantes_list]

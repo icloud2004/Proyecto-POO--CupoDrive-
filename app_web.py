@@ -748,22 +748,41 @@ def api_aspirantes():
     out = []
     for a in aspirantes_list:
         if isinstance(a, dict):
-            cedula = a.get("identificiacion") or a.get("identificacion") or a.get("cedula") or a.get("ident")
-            nombre = (a.get("nombres") or a.get("nombre") or "").strip()
-            puntaje = a.get("puntaje_postulacion") or a.get("puntaje") or a.get("puntaje_post")
-            estado = a.get("acepta_estado") or a.get("estado") or ""
+            cedula = a.get("cedula") or a.get("identificacion") or a.get("identificiacion") or a.get("ident")
+            nombre = (a.get("nombre") or a.get("nombres") or "").strip()
+            puntaje = a.get("puntaje") or a.get("puntaje_postulacion") or a.get("puntaje_post")
+            estado = a.get("estado") or a.get("acepta_estado") or ""
+
+            segmento = a.get("segmento", "")
+            prioridad = a.get("prioridad", "")
+            carrera_postulada = a.get("carrera_postulada") or a.get("nombre_carrera") or ""
+            campus = a.get("campus") or a.get("CAN_NOMBRE") or ""
+
         else:
-            cedula = getattr(a, "cedula", "") or getattr(a, "identificiacion", "")
-            nombre = getattr(a, "nombre", "") or ""
+            cedula = getattr(a, "cedula", "") or getattr(a, "identificacion", "") or getattr(a, "identificiacion", "")
+            nombre = (getattr(a, "nombre", "") or "").strip()
             puntaje = getattr(a, "puntaje", "") or getattr(a, "puntaje_postulacion", "")
-            estado = getattr(a, "estado", "")
+            estado = getattr(a, "estado", "") or ""
+
+            segmento = getattr(a, "segmento", "")
+            prioridad = getattr(a, "prioridad", "")
+            carrera_postulada = getattr(a, "carrera_postulada", "") or getattr(a, "nombre_carrera", "")
+            campus = getattr(a, "campus", "") or getattr(a, "sede", "")
+
         out.append({
             "cedula": str(cedula or ""),
-            "nombre": (nombre or "").strip(),
-            "puntaje": puntaje or "",
-            "estado": estado or ""
+            "nombre": nombre,
+            "puntaje": puntaje if puntaje is not None else "",
+            "estado": estado,
+
+            # ✅ campos clave para verificar que la segmentación existe
+            "segmento": segmento,
+            "prioridad": prioridad,
+            "carrera_postulada": carrera_postulada,
+            "campus": campus,
         })
     return jsonify(out)
+
 
 # ---------------------------
 # Endpoints para segmentos GLOBALES
