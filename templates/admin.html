@@ -1,3 +1,4 @@
+
 <!doctype html>
 <html lang="es">
   <head>
@@ -11,6 +12,8 @@
       .content { margin-left: 250px; padding: 20px; }
       .pointer { cursor: pointer; }
       .campus-badge { font-size: 0.85rem; margin-left: 8px; }
+      pre.json { background:#0b1220; color:#e5e7eb; padding:12px; border-radius:10px; }
+      .muted { color:#6b7280; }
     </style>
   </head>
   <body>
@@ -33,70 +36,70 @@
           <li class="nav-item"><a href="#" class="nav-link" id="menuAspirantes">Ver Aspirantes</a></li>
         </ul>
       </div>
-<div class="content flex-fill">
-  <!-- Upload panel -->
-  <div id="panelUpload">
-    <h4>Subir archivos CSV</h4>
 
-    <form id="uploadForm">
-      <div class="mb-3">
-        <label class="form-label">Archivo aspirantes (BaseDatos.csv)</label>
-        <input id="fileAspirantes" name="aspirantes" type="file" class="form-control" accept=".csv">
-      </div>
+      <div class="content flex-fill">
+        <!-- Upload panel -->
+        <div id="panelUpload">
+          <h4>Subir archivos CSV</h4>
 
-      <div class="mb-3">
-        <label class="form-label">Archivo carreras (Carreras.csv)</label>
-        <input id="fileCarreras" name="carreras" type="file" class="form-control" accept=".csv">
-      </div>
+          <form id="uploadForm">
+            <div class="mb-3">
+              <label class="form-label">Archivo aspirantes (BaseDatos.csv)</label>
+              <input id="fileAspirantes" name="aspirantes" type="file" class="form-control" accept=".csv">
+            </div>
 
-<div class="mb-3">
-  <button id="btnManageGlobalSegments" type="button" class="btn btn-outline-warning">
-    Gestionar segmentos globales
-  </button>
-  <div class="form-text">
-    Los segmentos globales aplican a todas las carreras (suma debe ser 100%).
-  </div>
-</div>
+            <div class="mb-3">
+              <label class="form-label">Archivo carreras (Carreras.csv)</label>
+              <input id="fileCarreras" name="carreras" type="file" class="form-control" accept=".csv">
+            </div>
 
-<hr>
+            <div class="mb-3">
+              <button id="btnManageGlobalSegments" type="button" class="btn btn-outline-warning">
+                Gestionar segmentos globales
+              </button>
+              <div class="form-text">
+                Los segmentos globales aplican a todas las carreras (suma debe ser 100%).
+              </div>
+            </div>
 
-<h6 class="mt-3">Período académico activo</h6>
+            <hr>
 
-<div class="row g-2 mb-3">
-  <div class="col-md-3">
-    <input id="periodoAnio" class="form-control" placeholder="Año (ej. 2025)">
-  </div>
+            <h6 class="mt-3">Período académico activo</h6>
 
-  <div class="col-md-5">
-    <input id="periodoNombre" class="form-control" placeholder="Período (ej. Primer Semestre)">
-  </div>
+            <div class="row g-2 mb-3">
+              <div class="col-md-3">
+                <input id="periodoAnio" class="form-control" placeholder="Año (ej. 2025)">
+              </div>
 
-  <div class="col-md-2">
-    <button id="btnGuardarPeriodo" type="button" class="btn btn-outline-primary">
-      Guardar período
-    </button>
-  </div>
-</div>
+              <div class="col-md-5">
+                <input id="periodoNombre" class="form-control" placeholder="Período (ej. Primer Semestre)">
+              </div>
 
-      <button id="btnUpload" type="button" class="btn btn-primary">
-        Subir y cargar
-      </button>
+              <div class="col-md-2">
+                <button id="btnGuardarPeriodo" type="button" class="btn btn-outline-primary">
+                  Guardar período
+                </button>
+              </div>
+            </div>
 
-      <span class="mx-2"></span>
+            <button id="btnUpload" type="button" class="btn btn-primary">
+              Subir y cargar
+            </button>
 
-      <button id="btnAssignAll" type="button" class="btn btn-success">
-        Asignar cupos automáticamente
-      </button>
+            <span class="mx-2"></span>
 
-      <button id="btnReport" type="button" class="btn btn-outline-secondary">
-        Generar reporte
-      </button>
+            <button id="btnAssignAll" type="button" class="btn btn-success">
+              Asignar cupos automáticamente
+            </button>
 
-    </form>
+            <button id="btnReport" type="button" class="btn btn-outline-secondary">
+              Generar reporte
+            </button>
 
-    <hr>
-  </div>
-</div>
+          </form>
+
+          <hr>
+        </div>
 
         <!-- Cupos panel -->
         <div id="panelCupos" style="display:none;">
@@ -152,16 +155,62 @@
       </div>
     </div>
 
-    <!-- Modal ver detalles de carrera / cupos -->
+    <!-- Modal ver cupos -->
     <div class="modal fade" id="modalVerCupos" tabindex="-1" aria-hidden="true">
-      <div class="modal-dialog modal-lg">
+      <div class="modal-dialog modal-xl">
         <div class="modal-content">
           <div class="modal-header">
             <h5 class="modal-title" id="modalVerCuposTitle">Cupos</h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
           </div>
           <div class="modal-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <div class="muted">Tip: usa “Ver info” para ver el detalle del aspirante.</div>
+              <input id="cuposSearch" class="form-control form-control-sm" style="max-width:280px" placeholder="Buscar por cédula o nombre...">
+            </div>
             <div id="modalCuposBody"></div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal info aspirante -->
+    <div class="modal fade" id="modalInfoAspirante" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Información del aspirante</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+          </div>
+          <div class="modal-body">
+            <div id="aspCard" class="border rounded-3 p-3">
+              <div class="d-flex justify-content-between flex-wrap gap-2">
+                <div>
+                  <h6 class="mb-0" id="aspNombre">—</h6>
+                  <div class="muted">Cédula: <span id="aspCedula">—</span></div>
+                </div>
+                <div class="text-end">
+                  <div class="muted">Puntaje</div>
+                  <div class="fs-5 fw-semibold" id="aspPuntaje">—</div>
+                </div>
+              </div>
+              <hr>
+              <div class="row g-2">
+                <div class="col-md-4"><div class="muted">Estado</div><div id="aspEstado">—</div></div>
+                <div class="col-md-4"><div class="muted">Segmento</div><div id="aspSegmento">—</div></div>
+                <div class="col-md-4"><div class="muted">Prioridad</div><div id="aspPrioridad">—</div></div>
+                <div class="col-md-6"><div class="muted">Carrera postulada</div><div id="aspCarrera">—</div></div>
+                <div class="col-md-6"><div class="muted">Campus</div><div id="aspCampus">—</div></div>
+              </div>
+              <hr>
+              <details>
+                <summary class="pointer">Ver JSON completo</summary>
+                <pre class="json mt-2" id="aspiranteInfoPre">{}</pre>
+              </details>
+            </div>
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
@@ -210,6 +259,7 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
     <script>
       // helper fetch que incluye cookies
       async function api(path, opts = {}) {
@@ -230,12 +280,14 @@
         document.getElementById('panelCupos').style.display = 'none';
         document.getElementById('panelAspirantes').style.display = 'none';
       });
+
       document.getElementById('menuCupos')?.addEventListener('click', async () => {
         document.getElementById('panelUpload').style.display = 'none';
         document.getElementById('panelCupos').style.display = 'block';
         document.getElementById('panelAspirantes').style.display = 'none';
         await cargarColegios();
       });
+
       document.getElementById('menuAspirantes')?.addEventListener('click', async () => {
         document.getElementById('panelUpload').style.display = 'none';
         document.getElementById('panelCupos').style.display = 'none';
@@ -250,7 +302,6 @@
 
       // Upload
       document.getElementById('btnUpload')?.addEventListener('click', async () => {
-        const form = document.getElementById('uploadForm');
         const fd = new FormData();
         const fAsp = document.getElementById('fileAspirantes').files[0];
         const fCarr = document.getElementById('fileCarreras').files[0];
@@ -270,7 +321,7 @@
       document.getElementById('btnAssignAll')?.addEventListener('click', async () => {
         if (!confirm('¿Asignar cupos automáticamente a todas las carreras?')) return;
         try {
-          const res = await api('/admin/assign', { method: 'POST' });
+          await api('/admin/assign', { method: 'POST' });
           alert('Asignación finalizada.');
           await cargarColegios();
         } catch (e) {
@@ -278,47 +329,50 @@
         }
       });
 
-      // Report
-      document.getElementById('btnReport')?.addEventListener('click', async () => {
-        try {
-          const res = await api('/admin/report', { method: 'POST' });
-          alert('Reporte generado (si todo salió bien).');
-        } catch (e) {
-          alert('Error al generar reporte: ' + e.message);
-        }
-      });
-
-      // Cargar carreras y mostrarlas en la UI con botones (sin botón de segmentos por carrera)
+      // Cargar carreras y mostrarlas
       async function cargarColegios() {
         try {
           const carreras = await api('/api/carreras', { method: 'GET' });
           const container = document.getElementById('carrerasContainer');
           container.innerHTML = '';
+
           if (!carreras || carreras.length === 0) {
             container.innerHTML = '<p>No hay carreras cargadas.</p>';
             return;
           }
+
           carreras.forEach(c => {
             const div = document.createElement('div');
             div.className = 'mb-3 d-flex justify-content-between align-items-center';
-            const campusText = c.campus ? `<span class="badge bg-info text-dark campus-badge">${c.campus}</span>` : '';
+
+            const campusText = c.campus
+              ? `<span class="badge bg-info text-dark campus-badge">${c.campus}</span>`
+              : '';
+
             div.innerHTML = `
               <div>
                 <strong>${c.nombre}</strong> ${campusText}<br>
                 <small>Cupos: <span id="cupos-${c.id}">${c.oferta_cupos}</span> — Asignados: ${c.cupos_asignados}</small>
               </div>
               <div>
-                <button class="btn btn-sm btn-outline-primary me-2 btn-ver-cupos" data-id="${c.id}" data-nombre="${c.nombre}" data-campus="${c.campus || ''}">Ver cupos</button>
-                <button class="btn btn-sm btn-outline-secondary me-2 btn-editar-cupos" data-id="${c.id}" data-nombre="${c.nombre}" data-oferta="${c.oferta_cupos}" data-campus="${c.campus || ''}">Editar cupos</button>
-                <button class="btn btn-sm btn-outline-danger btn-eliminar-cupos" data-id="${c.id}">Eliminar todos cupos</button>
+                <button class="btn btn-sm btn-outline-primary me-2 btn-ver-cupos"
+                  data-id="${c.id}" data-nombre="${c.nombre}" data-campus="${c.campus || ''}">
+                  Ver cupos
+                </button>
+                <button class="btn btn-sm btn-outline-secondary me-2 btn-editar-cupos"
+                  data-id="${c.id}" data-nombre="${c.nombre}" data-oferta="${c.oferta_cupos}" data-campus="${c.campus || ''}">
+                  Editar cupos
+                </button>
+                <button class="btn btn-sm btn-outline-danger btn-eliminar-cupos" data-id="${c.id}">
+                  Eliminar todos cupos
+                </button>
               </div>
             `;
             container.appendChild(div);
           });
 
-          // Attach event listeners to newly created buttons
           document.querySelectorAll('.btn-editar-cupos').forEach(btn => {
-            btn.addEventListener('click', (e) => {
+            btn.addEventListener('click', () => {
               const id = btn.getAttribute('data-id');
               const nombre = btn.getAttribute('data-nombre');
               const oferta = btn.getAttribute('data-oferta');
@@ -332,55 +386,122 @@
               const id = btn.getAttribute('data-id');
               const nombre = btn.getAttribute('data-nombre');
               const campus = btn.getAttribute('data-campus') || '';
+
               try {
                 const data = await api(`/api/carreras/${encodeURIComponent(id)}/cupos`, { method: 'GET' });
-                // mostrar en modal
+
                 const cont = document.getElementById('modalCuposBody');
-                document.getElementById('modalVerCuposTitle').textContent = `Cupos para ${nombre} ${campus ? '(' + campus + ')' : ''}`;
+                document.getElementById('modalVerCuposTitle').textContent =
+                  `Cupos para ${nombre} ${campus ? '(' + campus + ')' : ''}`;
+
                 cont.innerHTML = '';
+
                 if (!data || !data.cupos || data.cupos.length === 0) {
                   cont.innerHTML = '<p>No hay cupos para esta carrera.</p>';
                 } else {
                   const table = document.createElement('table');
-                  table.className = 'table table-sm';
-                  table.innerHTML = '<thead><tr><th>ID</th><th>Estado</th><th>Aspirante</th><th>Acciones</th></tr></thead>';
+                  table.className = 'table table-sm align-middle';
+                  table.innerHTML = '<thead><tr><th>ID</th><th>Estado</th><th>Aspirante</th><th style="width:280px">Acciones</th></tr></thead>';
+
                   const tb = document.createElement('tbody');
+
+                  // Cache para búsqueda
+                  window.__cuposRows = [];
+
                   data.cupos.forEach(cc => {
                     const tr = document.createElement('tr');
-                    const aspirName = cc.aspirante ? (cc.aspirante.nombre || cc.aspirante.nombre || '') : '';
-                    tr.innerHTML = `<td>${cc.id_cupo}</td><td>${cc.estado}</td><td>${aspirName}</td>
+
+                    const aspNombre = cc.aspirante ? (cc.aspirante.nombre || '') : '';
+                    const aspCedula = cc.aspirante ? (cc.aspirante.cedula || '') : '';
+                    const aspTexto = aspNombre ? `${aspNombre} (${aspCedula})` : '—';
+
+                    tr.dataset.search = (aspNombre + " " + aspCedula).toLowerCase();
+
+                    tr.innerHTML = `
+                      <td>${cc.id_cupo}</td>
+                      <td>${cc.estado}</td>
+                      <td>${aspTexto}</td>
                       <td>
                         <button class="btn btn-sm btn-outline-danger btn-delete-cupo" data-id="${cc.id_cupo}">Eliminar</button>
                         <button class="btn btn-sm btn-outline-warning btn-liberar-cupo" data-id="${cc.id_cupo}">Liberar</button>
-                      </td>`;
+                        ${aspCedula ? `<button class="btn btn-sm btn-outline-info btn-info-asp" data-cedula="${aspCedula}">Ver info</button>` : ''}
+                      </td>
+                    `;
+
                     tb.appendChild(tr);
+                    window.__cuposRows.push(tr);
                   });
+
                   table.appendChild(tb);
                   cont.appendChild(table);
 
-                  // attach delete/liberar handlers
-                  document.querySelectorAll('.btn-delete-cupo').forEach(b => {
+                  // Búsqueda
+                  const search = document.getElementById('cuposSearch');
+                  if (search) {
+                    search.value = '';
+                    search.oninput = () => {
+                      const q = (search.value || '').trim().toLowerCase();
+                      window.__cuposRows.forEach(row => {
+                        const ok = row.dataset.search.includes(q);
+                        row.style.display = ok ? '' : 'none';
+                      });
+                    };
+                  }
+
+                  // delete handlers
+                  cont.querySelectorAll('.btn-delete-cupo').forEach(b => {
                     b.addEventListener('click', async () => {
                       if (!confirm('¿Eliminar este cupo?')) return;
                       try {
                         await api(`/api/cupos/${encodeURIComponent(b.getAttribute('data-id'))}`, { method: 'DELETE' });
                         await cargarColegios();
-                        // refresh modal content
-                        btn.click();
+                        btn.click(); // refresca modal
                       } catch (e) {
                         alert('Error: ' + e.message);
                       }
                     });
                   });
-                  document.querySelectorAll('.btn-liberar-cupo').forEach(b => {
+
+                  // liberar handlers
+                  cont.querySelectorAll('.btn-liberar-cupo').forEach(b => {
                     b.addEventListener('click', async () => {
                       if (!confirm('¿Liberar este cupo?')) return;
                       try {
                         await api(`/api/cupos/${encodeURIComponent(b.getAttribute('data-id'))}/liberar`, { method: 'POST' });
                         await cargarColegios();
-                        btn.click();
+                        btn.click(); // refresca modal
                       } catch (e) {
                         alert('Error: ' + e.message);
+                      }
+                    });
+                  });
+
+                  // ver info aspirante
+                  cont.querySelectorAll('.btn-info-asp').forEach(b => {
+                    b.addEventListener('click', async () => {
+                      const ced = b.getAttribute('data-cedula');
+                      if (!ced) return;
+
+                      try {
+                        const res = await api(`/api/aspirantes/${encodeURIComponent(ced)}`, { method: 'GET' });
+                        const a = res.aspirante || {};
+
+                        document.getElementById('aspNombre').textContent = a.nombre || '—';
+                        document.getElementById('aspCedula').textContent = a.cedula || ced || '—';
+                        document.getElementById('aspPuntaje').textContent = (a.puntaje ?? a.puntaje_postulacion ?? '—');
+                        document.getElementById('aspEstado').textContent = a.estado || '—';
+                        document.getElementById('aspSegmento').textContent = a.segmento || '—';
+                        document.getElementById('aspPrioridad').textContent = (a.prioridad ?? '—');
+                        document.getElementById('aspCarrera').textContent = a.carrera_postulada || a.nombre_carrera || '—';
+                        document.getElementById('aspCampus').textContent = a.campus || '—';
+
+                        document.getElementById('aspiranteInfoPre').textContent =
+                          JSON.stringify(a, null, 2);
+
+                        const modalAsp = new bootstrap.Modal(document.getElementById('modalInfoAspirante'));
+                        modalAsp.show();
+                      } catch (e) {
+                        alert('Error cargando aspirante: ' + e.message);
                       }
                     });
                   });
@@ -394,7 +515,7 @@
             });
           });
 
-          // Eliminar todos cupos (usa endpoint DELETE dedicado)
+          // Eliminar todos cupos
           document.querySelectorAll('.btn-eliminar-cupos').forEach(btn => {
             btn.addEventListener('click', async () => {
               if (!confirm('¿Eliminar todos los cupos de esta carrera? Esta acción puede afectar asignaciones.')) return;
@@ -406,18 +527,7 @@
                 alert('Cupos eliminados.');
                 await cargarColegios();
               } catch (e) {
-                try {
-                  const data = await api(`/api/carreras/${encodeURIComponent(id)}/cupos`, { method: 'GET' });
-                  if (data && data.cupos) {
-                    for (const cup of data.cupos) {
-                      await api(`/api/cupos/${encodeURIComponent(cup.id_cupo)}`, { method: 'DELETE' });
-                    }
-                  }
-                  alert('Cupos eliminados (fallback).');
-                  await cargarColegios();
-                } catch (err) {
-                  alert('Error al eliminar cupos: ' + (err.message || err));
-                }
+                alert('Error al eliminar cupos: ' + e.message);
               }
             });
           });
@@ -428,7 +538,7 @@
         }
       }
 
-      // Modal helpers
+      // Modal helpers editar cupos
       let carreraEditarId = null;
       const modalEditar = new bootstrap.Modal(document.getElementById('modalEditarCupos'));
       function abrirModalEditar(id, nombre, oferta, campus) {
@@ -497,9 +607,7 @@
         }
       });
 
-      // -----------------------
       // Segmentos globales modal logic
-      // -----------------------
       let globalSegments = [];
       let modalGSeg = new bootstrap.Modal(document.getElementById('modalSegmentosGlobal'));
 
@@ -545,6 +653,7 @@
             document.getElementById('gsegOrden').value = s.orden;
           });
         });
+
         document.querySelectorAll('.btn-del-gseg').forEach(b => {
           b.addEventListener('click', async () => {
             if (!confirm('¿Eliminar segmento global?')) return;
@@ -571,7 +680,6 @@
           document.getElementById('gsegError').classList.remove('d-none');
           return;
         }
-        // client-side update: if exists replace, else push
         const idx = globalSegments.findIndex(s => s.nombre.trim().toLowerCase() === nombre.toLowerCase());
         if (idx >= 0) {
           globalSegments[idx].porcentaje = porcentaje;
@@ -580,7 +688,7 @@
           globalSegments.push({ nombre, porcentaje, orden });
         }
         renderSegmentosGlobalList(globalSegments);
-        // clear form
+
         document.getElementById('gsegNombre').value = '';
         document.getElementById('gsegPorcentaje').value = '';
         document.getElementById('gsegOrden').value = '';
@@ -589,7 +697,6 @@
 
       document.getElementById('btnSaveGSeg')?.addEventListener('click', async () => {
         try {
-          // validate sum == 100
           const suma = globalSegments.reduce((s, x) => s + (parseFloat(x.porcentaje) || 0), 0);
           if (Math.abs(suma - 100.0) > 0.0001) {
             alert('La suma de porcentajes debe ser 100. Actualmente: ' + suma);
@@ -607,61 +714,56 @@
         }
       });
 
-      // Arranque: seleccionar panel upload por defecto
+      // Periodo: cargar y guardar
+      async function cargarPeriodo() {
+        try {
+          const p = await api('/api/periodo');
+          document.getElementById('periodoAnio').value = p.anio || '';
+          document.getElementById('periodoNombre').value = p.periodo || '';
+        } catch (e) {}
+      }
+
+      document.getElementById('btnGuardarPeriodo')?.addEventListener('click', async () => {
+        const anio = document.getElementById('periodoAnio').value;
+        const periodo = document.getElementById('periodoNombre').value;
+
+        try {
+          await api('/admin/periodo', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ anio, periodo })
+          });
+          alert("Período guardado correctamente");
+        } catch (e) {
+          alert(e.message);
+        }
+      });
+
+      // Report: descarga real del Excel (blob)
+      document.getElementById("btnReport")?.addEventListener("click", () => {
+        fetch("/admin/report", { method: "POST", credentials: "include" })
+          .then(res => {
+            if (!res.ok) throw new Error("Error generando reporte");
+            return res.blob();
+          })
+          .then(blob => {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "reporte_cupos.xlsx";
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+          })
+          .catch(err => alert("Error: " + err.message));
+      });
+
+      // Arranque
       document.getElementById('menuUpload').click();
+      cargarPeriodo();
     </script>
   </body>
 </html>
-
-<script>
-document.getElementById("btnReport").addEventListener("click", () => {
-    fetch("/admin/report", {
-        method: "POST"
-    })
-    .then(res => {
-        if (!res.ok) throw new Error("Error generando reporte");
-        return res.blob();
-    })
-    .then(blob => {
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "reporte_cupos.xlsx";
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(url);
-    })
-    .catch(err => {
-        alert("Error: " + err.message);
-    });
-});
-
-async function cargarPeriodo() {
-  try {
-    const p = await api('/api/periodo');
-    document.getElementById('periodoAnio').value = p.anio || '';
-    document.getElementById('periodoNombre').value = p.periodo || '';
-  } catch (e) {}
-}
-
-document.getElementById('btnGuardarPeriodo').addEventListener('click', async () => {
-  const anio = document.getElementById('periodoAnio').value;
-  const periodo = document.getElementById('periodoNombre').value;
-
-  try {
-    await api('/admin/periodo', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ anio, periodo })
-    });
-    alert("Período guardado correctamente");
-  } catch (e) {
-    alert(e.message);
-  }
-});
-
-cargarPeriodo();
-
-</script>
+```
 

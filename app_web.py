@@ -326,14 +326,23 @@ def find_cupo_by_id_global(id_cupo):
     return None, None
 
 def find_aspirante_by_cedula(cedula):
+    target = str(cedula).strip()
     for a in aspirantes_list:
         try:
-            if str(getattr(a, "cedula", "") or "").strip() == str(cedula).strip():
-                return a
-        except Exception:
+            # Si es dict (lo más común en tu sistema)
             if isinstance(a, dict):
-                if str(a.get("identificiacion") or a.get("identificacion") or a.get("cedula") or "").strip() == str(cedula).strip():
+                c = a.get("cedula") or a.get("identificacion") or a.get("identificiacion")
+                if str(c or "").strip() == target:
                     return a
+
+            # Si es objeto
+            else:
+                c = getattr(a, "cedula", None) or getattr(a, "identificacion", None) or getattr(a, "identificiacion", None)
+                if str(c or "").strip() == target:
+                    return a
+
+        except Exception:
+            continue
     return None
 
 # ---------------------------
@@ -705,16 +714,24 @@ def api_carrera_cupos(carrera_id):
             cupos = []
             for cup in getattr(c, "cupos", []):
                 aspir = getattr(cup, "aspirante", None)
+
+                # ✅ soportar aspirante dict u objeto
+                if isinstance(aspir, dict):
+                    ced = aspir.get("cedula") or aspir.get("identificacion") or aspir.get("identificiacion") or ""
+                    nom = aspir.get("nombre") or aspir.get("nombres") or ""
+                else:
+                    ced = getattr(aspir, "cedula", "") if aspir else ""
+                    nom = getattr(aspir, "nombre", "") if aspir else ""
+
                 cupos.append({
                     "id_cupo": getattr(cup, "id_cupo", ""),
                     "estado": getattr(cup, "estado", ""),
-                    "aspirante": {
-                        "cedula": getattr(aspir, "cedula", "") if aspir else "",
-                        "nombre": getattr(aspir, "nombre", "") if aspir else ""
-                    } if aspir else None
+                    "aspirante": {"cedula": str(ced), "nombre": str(nom)} if aspir else None
                 })
+
             return jsonify({"carrera": getattr(c, "nombre", ""), "cupos": cupos})
     return jsonify({"error": "Carrera no encontrada"}), 404
+
 
 @app.route("/api/carreras/<carrera_id>/cupos", methods=["DELETE"])
 @login_required(role="admin")
@@ -782,6 +799,38 @@ def api_aspirantes():
             "campus": campus,
         })
     return jsonify(out)
+
+@app.route("/api/aspirantes/<cedula>", methods=["GET"])
+@login_required(role="admin")
+def api_aspirante_detalle(cedula):
+    a = find_aspirante_by_cedula(cedula)
+    if a is None:
+        return jsonify({"error": "Aspirante no encontrado"}), 404
+
+    # Normalizar para que el front siempre reciba lo mismo
+    if isinstance(a, dict):
+        data = dict(a)
+        data["cedula"] = str(data.get("cedula") or data.get("identificacion") or data.get("identificiacion") or "").strip()
+
+        if not data.get("nombre"):
+            n = (data.get("nombres") or "").strip()
+            ap = (data.get("apellidos") or "").strip()
+            data["nombre"] = (n + " " + ap).strip()
+
+    else:
+        data = {
+            "cedula": str(getattr(a, "cedula", "") or getattr(a, "identificacion", "") or getattr(a, "identificiacion", "")).strip(),
+            "nombre": getattr(a, "nombre", "") or "",
+            "puntaje": getattr(a, "puntaje", "") or getattr(a, "puntaje_postulacion", "") or "",
+            "estado": getattr(a, "estado", "") or "",
+            "segmento": getattr(a, "segmento", "") or "",
+            "prioridad": getattr(a, "prioridad", "") or "",
+            "carrera_postulada": getattr(a, "carrera_postulada", "") or getattr(a, "carrera", "") or "",
+            "campus": getattr(a, "campus", "") or ""
+        }
+
+    return jsonify({"ok": True, "aspirante": data})
+
 
 
 # ---------------------------
