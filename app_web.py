@@ -830,6 +830,98 @@ def api_aspirante_detalle(cedula):
         }
 
     return jsonify({"ok": True, "aspirante": data})
+@app.route("/api/cupos/<id_cupo>", methods=["DELETE"])
+@login_required(role="admin")
+def api_delete_cupo(id_cupo):
+    cupo, carrera = find_cupo_by_id_global(id_cupo)
+    if cupo is None:
+        return jsonify({"error": "Cupo no encontrado"}), 404
+
+    try:
+        # Si tiene aspirante asociado, lo desasociamos
+        try:
+            aspir = getattr(cupo, "aspirante", None)
+            if aspir is not None:
+                # opcional: marcar aspirante como no asignado si tu modelo lo usa
+                if isinstance(aspir, dict):
+                    aspir["carrera_asignada"] = None
+                else:
+                    if hasattr(aspir, "carrera_asignada"):
+                        setattr(aspir, "carrera_asignada", None)
+        except Exception:
+            pass
+
+        # Quitar el cupo de la carrera
+        try:
+            carrera.cupos = [c for c in getattr(carrera, "cupos", []) if str(getattr(c, "id_cupo", "")) != str(id_cupo)]
+        except Exception:
+            pass
+
+        # Persistir
+        try:
+            r = ensure_repo()
+            if r and hasattr(r, "save_all"):
+                r.save_all()
+            else:
+                save_cupos(carreras_list)
+        except Exception:
+            pass
+
+        return jsonify({"ok": True, "deleted": str(id_cupo)})
+
+    except Exception as e:
+        return jsonify({"error": f"Error eliminando cupo: {e}"}), 500
+
+
+@app.route("/api/cupos/<id_cupo>/liberar", methods=["POST"])
+@login_required(role="admin")
+def api_liberar_cupo(id_cupo):
+    cupo, carrera = find_cupo_by_id_global(id_cupo)
+    if cupo is None:
+        return jsonify({"error": "Cupo no encontrado"}), 404
+
+    try:
+        # Desasociar aspirante
+        try:
+            aspir = getattr(cupo, "aspirante", None)
+            if aspir is not None:
+                if isinstance(aspir, dict):
+                    aspir["estado"] = "Postulado"
+                    aspir["carrera_asignada"] = None
+                else:
+                    if hasattr(aspir, "estado"):
+                        setattr(aspir, "estado", "Postulado")
+                    if hasattr(aspir, "carrera_asignada"):
+                        setattr(aspir, "carrera_asignada", None)
+        except Exception:
+            pass
+
+        # Marcar cupo como disponible
+        try:
+            setattr(cupo, "aspirante", None)
+        except Exception:
+            pass
+
+        try:
+            setattr(cupo, "estado", "Disponible")
+        except Exception:
+            pass
+
+        # Persistir
+        try:
+            r = ensure_repo()
+            if r and hasattr(r, "save_all"):
+                r.save_all()
+            else:
+                save_cupos(carreras_list)
+        except Exception:
+            pass
+
+        return jsonify({"ok": True, "liberado": str(id_cupo), "estado": "Disponible"})
+
+    except Exception as e:
+        return jsonify({"error": f"Error liberando cupo: {e}"}), 500
+
 
 
 
