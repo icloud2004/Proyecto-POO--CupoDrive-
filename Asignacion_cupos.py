@@ -1,11 +1,4 @@
-"""
-Asignacion_cupos.py — versión robusta y compatible con app_web.py
-
-Fixes importantes:
-- Evita "unhashable type: 'dict'" (NO usa dicts como keys)
-- Modo estricto: NO manda a "Población general" si el aspirante tiene segmento y no coincide
-- Solo rellena cupos con el MISMO pool válido (no con "cualquier candidato")
-"""
+#PATRON DE DISEEÑO: STRATEGY
 
 from abc import ABC, abstractmethod
 import random

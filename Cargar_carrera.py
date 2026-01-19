@@ -1,10 +1,4 @@
-"""
-Módulo para cargar la oferta de carreras desde 'Carreras.csv' (por defecto).
-- Maneja CSV con separador ';' y BOM (utf-8-sig).
-- Intenta devolver instancias de la clase Carrera si está disponible en el repo,
-  en caso contrario devuelve diccionarios con los campos parseados.
-- Tolerante a variaciones en nombres de columna comunes.
-"""
+
 
 from typing import List, Dict, Any
 import csv

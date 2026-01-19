@@ -1,3 +1,4 @@
+#PATRON DE DISEÑO: DECORATOR
 from abc import ABC, abstractmethod
 from datetime import datetime
 # INTERFAZ

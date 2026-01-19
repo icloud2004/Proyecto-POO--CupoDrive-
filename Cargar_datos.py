@@ -1,11 +1,4 @@
-# Cargar_datos.py
-# Carga aspirantes desde BaseDatos.csv de forma robusta
-# - Compatible con app_web.py
-# - Conserva campos CLAVE: segmento, prioridad, carrera_postulada, campus
-# - Mapea segmento numérico -> nombre de segmento
-# - Soporta delimitador ; o TAB (autodetect)
-# - Normaliza headers (strip/lower)
-# - Deduplica por cedula
+
 
 import csv
 
