@@ -2,16 +2,9 @@
   {
     "carrera_id": "349360",
     "carrera_nombre": "Software",
-    "id_cupo": "349360-1",
-    "estado": "Asignado",
-    "aspirante_cedula": "223450304"
-  },
-  {
-    "carrera_id": "349360",
-    "carrera_nombre": "Software",
     "id_cupo": "349360-2",
-    "estado": "Asignado",
-    "aspirante_cedula": "223450659"
+    "estado": "Disponible",
+    "aspirante_cedula": ""
   },
   {
     "carrera_id": "349360",

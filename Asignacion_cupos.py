@@ -194,7 +194,7 @@ class MultiSegmentStrategy(AssignmentStrategy):
                     break
 
             if chosen_norm is None:
-                # ✅ CAMBIO CLAVE:
+                #  CAMBIO CLAVE:
                 # si strict=True y el aspirante TIENE memberships, NO lo mandes a población general
                 if self.strict_segments and memberships:
                     continue
@@ -228,7 +228,7 @@ class MultiSegmentStrategy(AssignmentStrategy):
                 assigned.extend(_asignar_a_lista(cupos[idx:idx+take], sel, carrera))
                 idx += take
 
-        # ✅ IMPORTANTE:
+        #  IMPORTANTE:
         # NO rellenamos con "cualquier candidato". Solo queda vacío si no hay elegibles.
         return assigned
 

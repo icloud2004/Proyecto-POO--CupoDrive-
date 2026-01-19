@@ -58,7 +58,7 @@ def serialize_aspirante(a) -> dict:
         puntaje = pick(a, "puntaje_postulacion", "puntaje", "puntaje_post", default=0)
         estado = pick(a, "estado", "acepta_estado", default="Postulado")
 
-        # 🔥 CAMPOS CLAVE
+        #  CAMPOS CLAVE
         segmento = pick(a, "segmento", "grupo", "grupo_nombre", "segmento_slug", default="")
         prioridad = pick(a, "prioridad", "orden_prioridad", default="")
         carrera_post = pick(a, "carrera_postulada", "nombre_carrera", "carrera", "pro_nombre", default="")
