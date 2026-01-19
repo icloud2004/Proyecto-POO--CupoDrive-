@@ -561,53 +561,95 @@ def student_dashboard():
         aspir_data = {}
     return render_template("estudiante.html", user=user, aspirante=aspirante if not isinstance(aspirante, dict) else aspir_data)
 
+
 @app.route("/student/cupo/accept", methods=["POST"])
 @login_required(role=None)
 def student_accept_cupo():
     user = session.get("user", {})
     cedula = user.get("username")
     aspirante = find_aspirante_by_cedula(cedula)
+
     if aspirante is None:
         return jsonify({"error": "Aspirante no encontrado"}), 404
-    # Lógica de aceptar cupo (ajusta campos según tu modelo)
-    try:
-        if isinstance(aspirante, dict):
-            aspirante["estado"] = "Aceptado"
+
+    def _get(a, key, default=None):
+        return a.get(key, default) if isinstance(a, dict) else getattr(a, key, default)
+
+    def _set(a, key, value):
+        if isinstance(a, dict):
+            a[key] = value
         else:
-            setattr(aspirante, "estado", "Aceptado")
-        # persistir cambios si existe la función
+            setattr(a, key, value)
+
+    estado = (_get(aspirante, "estado", "") or "").strip()
+    carrera_asignada = _get(aspirante, "carrera_asignada", None)
+
+    # Validación: solo si ya está asignado
+    if estado.lower() != "asignado" or not carrera_asignada:
+        return jsonify({"error": "No puedes aceptar: Cupo no asignado o estado inválido."}), 400
+
+    try:
+        _set(aspirante, "estado", "Aceptado")
+
+        # ✅ Guardar fecha
+        _set(aspirante, "fecha_aceptacion", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+
         try:
             save_aspirantes(aspirantes_list)
         except Exception:
             pass
+
         report_url = url_for("student_report", cedula=str(cedula))
         return jsonify({"ok": True, "report_url": report_url})
     except Exception as e:
         return jsonify({"error": f"Error aceptando cupo: {e}"}), 500
+
 
 @app.route("/student/cupo/reject", methods=["POST"])
 @login_required(role=None)
 def student_reject_cupo():
     user = session.get("user", {})
     cedula = user.get("username")
+
     aspirante = find_aspirante_by_cedula(cedula)
     if aspirante is None:
         return jsonify({"error": "Aspirante no encontrado"}), 404
-    try:
-        if isinstance(aspirante, dict):
-            aspirante["estado"] = "Rechazado"
-            aspirante["carrera_asignada"] = None
+
+    # Helpers: leer campos sea dict u objeto
+    def _get(a, key, default=None):
+        return a.get(key, default) if isinstance(a, dict) else getattr(a, key, default)
+
+    def _set(a, key, value):
+        if isinstance(a, dict):
+            a[key] = value
         else:
-            setattr(aspirante, "estado", "Rechazado")
-            if hasattr(aspirante, "carrera_asignada"):
-                setattr(aspirante, "carrera_asignada", None)
+            setattr(a, key, value)
+
+    estado = (_get(aspirante, "estado", "") or "").strip()
+    carrera_asignada = _get(aspirante, "carrera_asignada", None)
+
+    # ✅ VALIDACIÓN: solo se puede rechazar si está asignado y tiene carrera
+    if estado.lower() != "asignado" or not carrera_asignada:
+        return jsonify({"error": "No puedes rechazar: Cupo no asignado o estado inválido."}), 400
+
+    try:
+        _set(aspirante, "estado", "Rechazado")
+        _set(aspirante, "carrera_asignada", None)
+
+        # ⚠️ Recomendado: aquí deberías LIBERAR el cupo en cupos.json
+        # (si tu sistema lo maneja). Si ya lo haces en otro lado, ignora esto.
+
         try:
             save_aspirantes(aspirantes_list)
         except Exception:
             pass
-        return jsonify({"ok": True, "message": "Cupo rechazado."})
+
+        return jsonify({"ok": True, "message": "Cupo rechazado. El cupo ha sido liberado."})
     except Exception as e:
         return jsonify({"error": f"Error rechazando cupo: {e}"}), 500
+
+from datetime import datetime
+from flask import render_template, render_template_string, session
 
 @app.route("/student/reporte/<cedula>")
 @login_required(role=None)
@@ -615,24 +657,34 @@ def student_report(cedula):
     aspirante = find_aspirante_by_cedula(cedula)
     if aspirante is None:
         return render_template("login.html", error="Reporte: aspirante no encontrado")
-    # Intentar renderizar plantilla 'reporte.html' si existe; si no, renderizar HTML simple
+
+    # helpers dict/obj
+    def _get(a, key, default=None):
+        return a.get(key, default) if isinstance(a, dict) else getattr(a, key, default)
+
+    # ✅ Carrera (lo que imprimirá reporte.html)
+    carrera = _get(aspirante, "carrera_asignada", None) or _get(aspirante, "carrera", None) or ""
+
+    # ✅ Fecha (si ya se guardó en accept, úsala; si no, fecha actual)
+    now_date = _get(aspirante, "fecha_aceptacion", None) or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    # Intentar renderizar plantilla 'reporte.html'
     try:
-        return render_template("reporte.html", aspirante=aspirante, user=session.get("user", {}))
+        return render_template(
+            "reporte.html",
+            aspirante=aspirante,
+            carrera=carrera,      # ✅ ahora sí
+            now_date=now_date,    # ✅ ahora sí
+            user=session.get("user", {})
+        )
     except Exception:
-        # plantilla no existe, devolver HTML sencillo
+        # Fallback HTML simple
         try:
-            if isinstance(aspirante, dict):
-                ced = aspirante.get("cedula", "")
-                nombre = aspirante.get("nombres") or aspirante.get("nombre") or ""
-                estado = aspirante.get("estado", "")
-                carrera = aspirante.get("carrera_asignada") or ""
-                puntaje = aspirante.get("puntaje") or ""
-            else:
-                ced = getattr(aspirante, "cedula", "")
-                nombre = getattr(aspirante, "nombre", "")
-                estado = getattr(aspirante, "estado", "")
-                carrera = getattr(aspirante, "carrera_asignada", "") or ""
-                puntaje = getattr(aspirante, "puntaje", "")
+            ced = _get(aspirante, "cedula", "")
+            nombre = _get(aspirante, "nombres", None) or _get(aspirante, "nombre", "") or ""
+            estado = _get(aspirante, "estado", "")
+            puntaje = _get(aspirante, "puntaje", "")
+
             html = f"""
             <html><head><meta charset='utf-8'><title>Reporte de {nombre}</title></head>
             <body>
@@ -642,11 +694,13 @@ def student_report(cedula):
               <p><strong>Puntaje:</strong> {puntaje}</p>
               <p><strong>Estado:</strong> {estado}</p>
               <p><strong>Carrera asignada:</strong> {carrera}</p>
+              <p><strong>Fecha:</strong> {now_date}</p>
             </body></html>
             """
             return render_template_string(html)
         except Exception:
             return "Reporte no disponible", 500
+
 
 # ---------------------------
 # API endpoints (admin)
@@ -922,9 +976,6 @@ def api_liberar_cupo(id_cupo):
     except Exception as e:
         return jsonify({"error": f"Error liberando cupo: {e}"}), 500
 
-
-
-
 # ---------------------------
 # Endpoints para segmentos GLOBALES
 # ---------------------------
@@ -984,7 +1035,6 @@ def api_delete_global_segmento(segmento_nombre):
         return jsonify({"error": "Segmento no encontrado"}), 404
     save_global_segmentos(new)
     return jsonify({"ok": True})
-
 # ---------------------------
 # Inicialización segura (carga predeterminada)
 # ---------------------------

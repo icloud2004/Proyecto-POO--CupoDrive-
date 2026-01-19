@@ -1,6 +1,6 @@
 from Cargar_datos import Cargar_datos
 from Carrera import Carrera
-from Asignación_cupos import Asignacion_cupo
+from Asignacion_cupos import Asignacion_cupo
 from Admin import Administrador
 from Aceptacion_cupo import Aceptacion_cupo
 from Certificado_aceptacion import Certificado_aceptacion

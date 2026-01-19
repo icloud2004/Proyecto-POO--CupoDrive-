@@ -1,16 +1,40 @@
 [
   {
-    "nombre": "poblacion",
-    "porcentaje": 80.0,
+    "nombre": "Política de cuotas",
+    "porcentaje": 10.0,
     "orden": 1,
     "min_pct": null,
     "max_pct": null,
     "descripcion": ""
   },
   {
-    "nombre": "politica de cuotas",
+    "nombre": "Vulnerabilidad socioeconómica",
     "porcentaje": 20.0,
     "orden": 2,
+    "min_pct": null,
+    "max_pct": null,
+    "descripcion": ""
+  },
+  {
+    "nombre": "Mérito académico",
+    "porcentaje": 20.0,
+    "orden": 3,
+    "min_pct": null,
+    "max_pct": null,
+    "descripcion": ""
+  },
+  {
+    "nombre": "Bachilleres",
+    "porcentaje": 30.0,
+    "orden": 4,
+    "min_pct": null,
+    "max_pct": null,
+    "descripcion": ""
+  },
+  {
+    "nombre": "Población general",
+    "porcentaje": 20.0,
+    "orden": 5,
     "min_pct": null,
     "max_pct": null,
     "descripcion": ""
