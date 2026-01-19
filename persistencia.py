@@ -1,3 +1,4 @@
+#PATRON DE DISEEÑO: SINGLETON
 import json
 import os
 import tempfile
