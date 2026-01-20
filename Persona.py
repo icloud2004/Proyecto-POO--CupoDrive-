@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
 class Persona(ABC):
-    #Implementa encapsulamiento
     def __init__(self, cedula, nombre):
         self.__cedula = cedula
         self.__nombre = nombre 
