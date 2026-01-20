@@ -1,8 +1,15 @@
 from abc import ABC, abstractmethod
 class Persona(ABC):
+    #Implementa encapsulamiento
     def __init__(self, cedula, nombre):
-        self.cedula = cedula
-        self.nombre = nombre
+        self.__cedula = cedula
+        self.__nombre = nombre 
+    @property
+    def cedula(self):
+        return self.__cedula
+    @property
+    def nombre(self):
+        return self.__nombre
 
     @abstractmethod
     def descripcion(self):
